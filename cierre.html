@@ -38,9 +38,10 @@
         let totalAcumuladoComprasDia = 0;
         let sucursalActual = "Desconocida";
 
-        // ✅ NUEVAS VARIABLES PARA LAS SECUENCIAS
-        let secuenciaActiva = ''; // '' significa la secuencia base, '1144' la secundaria
-        const ID_SECUNDARIA = '1144'; // Cambia este número si quieres usar otra serie secundaria
+        // ✅ NUEVAS VARIABLES: Para las secuencias y el ahorro de escrituras
+        let secuenciaActiva = ''; 
+        const ID_SECUNDARIA = '1144'; 
+        let temporizadorFirestore = null; // 🛑 VARIABLE DE CONTROL PARA DEBOUNCE
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -382,7 +383,7 @@
                     ultima_actualizacion: serverTimestamp()
                 }, { merge: true });
 
-                // ✅ Guardar el contador de la secuencia activa
+                // Guardar el contador de la secuencia activa
                 const idContador = secuenciaActiva ? `${sucursalActual}_${secuenciaActiva}` : sucursalActual;
                 const docRef = doc(db, "contadores_facturas", idContador);
                 const docSnap = await getDoc(docRef);
@@ -403,7 +404,7 @@
 
             facturasDelDia.push({
                 num_factura: numFactura,
-                serie: secuenciaActiva, // Se guarda la secuencia activa
+                serie: secuenciaActiva,
                 cedula: cedulaLimpia,
                 nombre,
                 detalles_materiales: materialesIngresados,
@@ -414,8 +415,8 @@
 
             actualizarTablaGeneralDia();
             limpiarFormularioFactura();
-            await cargarNumerosSecuencias(); // Actualiza los números de los botones
-            await obtenerSiguienteNumeroFacturaActual(); // Actualiza el campo del formulario
+            await cargarNumerosSecuencias();
+            await obtenerSiguienteNumeroFacturaActual();
             document.getElementById('cedulaCliente').focus();
         };
 
@@ -548,6 +549,7 @@
         }
 
         // --- LÓGICA PRINCIPAL: CALCULAR Y TRANSMITIR CAJA EN TIEMPO REAL ---
+        // 🛑 OPTIMIZACIÓN DE ESCRITURAS: Solo actualiza Firestore si el usuario deja de escribir por 1 segundo.
         window.calcularCajaDinamica = () => {
             const inicioBase = obtenerNumeroLimpio('cajaInicioBase');
             const ventas = obtenerNumeroLimpio('ventas');
@@ -563,7 +565,11 @@
             localStorage.setItem(`cajaInicioBase_${sucursalActual}`, document.getElementById('cajaInicioBase').value);
             localStorage.setItem(`ventas_${sucursalActual}`, document.getElementById('ventas').value);
 
-            actualizarCajaFirestore(disponibleCaja);
+            // 🛑 Cancelar el temporizador anterior y establecer uno nuevo (DEBOUNCE)
+            clearTimeout(temporizadorFirestore);
+            temporizadorFirestore = setTimeout(() => {
+                actualizarCajaFirestore(disponibleCaja);
+            }, 1000); // 1 segundo de espera después de la última pulsación de tecla
         };
 
         async function actualizarCajaFirestore(disponible) {
@@ -644,7 +650,6 @@
                 `<tr><td>${m.material}</td><td>${m.kilos} kg</td><td>₡${m.precio_unitario.toLocaleString('es-CR')}</td><td>₡${m.total_pago.toLocaleString('es-CR')}</td></tr>`
             ).join('');
 
-            // Estilo CSS para impresora térmica 80mm
             const contenido = `
                 <html>
                 <head><title>Factura #${fact.num_factura} ${fact.serie || ''}</title>
@@ -833,7 +838,7 @@
         .box-ultimo-cierre { background: #edf2f7; border-left: 4px solid #3182ce; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #2d3748; }
         .btn-print { background: #2b6cb0; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
 
-        /* ✅ NUEVO ESTILO PARA LOS SELECTORES DE SECUENCIA */
+        /* NUEVO ESTILO PARA LOS SELECTORES DE SECUENCIA */
         .seq-box {
             border: 2px solid #e2e8f0;
             border-radius: 8px;
@@ -914,7 +919,7 @@
                     </div>
                 </div>
 
-                <!-- ✅ NUEVO SELECTOR DE SECUENCIA VISUAL -->
+                <!-- SELECTOR DE SECUENCIA VISUAL -->
                 <div style="grid-column: 1 / -1; margin-top: 10px;">
                     <label>Seleccionar Secuencia de Facturación Activa:</label>
                     <div style="display: flex; gap: 12px; margin-top: 5px;">
@@ -994,7 +999,8 @@
                 <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;">
                     <div>
                         <label>Inicio de Caja Base (₡)</label>
-                        <input type="text" id="cajaInicioBase" placeholder="ej: 1 000 000" oninput="formatearInputMoneda(this)">
+                        <!-- ✅ AGREGADO onchange para ahorrar escrituras y optimizar -->
+                        <input type="text" id="cajaInicioBase" placeholder="ej: 1 000 000" oninput="formatearInputMoneda(this)" onchange="calcularCajaDinamica()">
                     </div>
                     <div>
                         <label>💵 Caja Disponible Hoy (₡)</label>
@@ -1002,7 +1008,8 @@
                     </div>
                     <div>
                         <label>Ventas del Día (₡)</label>
-                        <input type="text" id="ventas" oninput="formatearInputMoneda(this)">
+                        <!-- ✅ AGREGADO onchange para ahorrar escrituras y optimizar -->
+                        <input type="text" id="ventas" oninput="formatearInputMoneda(this)" onchange="calcularCajaDinamica()">
                     </div>
                     <div>
                         <label>Plata Agregada / Depósitos (₡)</label>
