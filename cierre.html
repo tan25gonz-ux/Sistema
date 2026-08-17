@@ -189,6 +189,9 @@
                     else if (data.tipo === "Deposito") deudaCalculada -= monto; 
                 });
                 
+                // 💰 CORRECCIÓN: El depósito del jefe es un préstamo, por lo tanto AUMENTA la deuda.
+                deudaCalculada += obtenerTotalDepositos();
+
                 document.getElementById('deudaTotalTxt').innerText = deudaCalculada.toLocaleString('es-CR');
             } catch (error) {
                 console.error("Error calculando la deuda: ", error);
@@ -387,12 +390,14 @@
             document.getElementById('depositoMontoInput').value = "";
 
             actualizarTablaDepositos();
+            calcularDeudaTotal(); // Actualiza la deuda (sumando el depósito)
         };
 
         window.eliminarDepositoLista = (index) => {
             listaDepositosDia.splice(index, 1);
             localStorage.setItem(`depositos_${sucursalActual}`, JSON.stringify(listaDepositosDia));
             actualizarTablaDepositos();
+            calcularDeudaTotal(); // Actualiza la deuda (restando el depósito eliminado)
         };
 
         function obtenerTotalDepositos() {
@@ -578,7 +583,7 @@
             actualizarTablaGeneralDia();
         };
 
-        // Función mejorada para imprimir sin conflictos de sintaxis
+        // --- IMPRESIÓN ADAPTADA PARA RECIBOS DE 80mm ---
         window.imprimirFactura = (index) => {
             const fact = facturasDelDia[index];
             if (!fact) return;
@@ -588,35 +593,37 @@
                 `<tr><td>${m.material}</td><td>${m.kilos} kg</td><td>₡${m.precio_unitario.toLocaleString('es-CR')}</td><td>₡${m.total_pago.toLocaleString('es-CR')}</td></tr>`
             ).join('');
 
+            // Estilo CSS especial para impresora térmica de 80mm (ancho de impresión útil ~72mm)
             const contenido = `
                 <html>
                 <head><title>Factura #${fact.num_factura}</title>
                 <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
-                    h2 { text-align: center; color: #1a73e8; }
-                    .info { margin-bottom: 20px; }
-                    .info p { margin: 4px 0; }
-                    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-                    th { background: #f1f5f9; text-align: left; padding: 8px; border-bottom: 2px solid #ccc; }
-                    td { padding: 6px 8px; border-bottom: 1px solid #eee; }
-                    .total { font-weight: bold; font-size: 1.2em; text-align: right; margin-top: 10px; border-top: 2px solid #333; padding-top: 10px; }
-                    .footer { margin-top: 30px; font-size: 0.9em; color: #666; text-align: center; }
+                    @page { margin: 5mm; size: 80mm auto; }
+                    body { font-family: Arial, sans-serif; font-size: 12px; max-width: 72mm; margin: 0 auto; padding: 0; }
+                    h2 { text-align: center; font-size: 14px; margin: 5px 0; }
+                    .info { font-size: 11px; margin-bottom: 10px; }
+                    .info p { margin: 2px 0; }
+                    table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 11px; }
+                    th { background: #eee; text-align: left; padding: 4px; border-bottom: 1px solid #999; }
+                    td { padding: 4px; border-bottom: 1px solid #ddd; }
+                    .total { font-weight: bold; font-size: 13px; text-align: right; margin-top: 10px; border-top: 2px solid #333; padding-top: 5px; }
+                    .footer { margin-top: 15px; font-size: 10px; color: #555; text-align: center; }
                 </style>
                 </head>
                 <body>
-                    <h2>📍 Sucursal: ${sucursalActual}</h2>
-                    <h2>FACTURA DE COMPRA #${fact.num_factura}</h2>
+                    <h2>📍 ${sucursalActual}</h2>
+                    <h2>FACTURA #${fact.num_factura}</h2>
                     <div class="info">
                         <p><b>Fecha:</b> ${fecha}</p>
                         <p><b>Cliente:</b> ${fact.nombre}</p>
                         <p><b>Cédula:</b> ${fact.cedula}</p>
                     </div>
                     <table>
-                        <thead><tr><th>Material</th><th>Cantidad (kg)</th><th>Precio Unitario</th><th>Total</th></tr></thead>
+                        <thead><tr><th>Material</th><th>Kg</th><th>₡/Kg</th><th>Total</th></tr></thead>
                         <tbody>${detalles}</tbody>
                     </table>
-                    <div class="total">Total a pagar: ₡${fact.total_factura.toLocaleString('es-CR')}</div>
-                    <div class="footer">Factura generada automáticamente - Sistema de Gestión</div>
+                    <div class="total">Total: ₡${fact.total_factura.toLocaleString('es-CR')}</div>
+                    <div class="footer">Gracias por su visita</div>
                 </body>
                 </html>
             `;
@@ -626,7 +633,6 @@
                 ventana.document.write(contenido);
                 ventana.document.close();
                 ventana.focus();
-                // Pequeño retraso para asegurar renderizado
                 setTimeout(() => ventana.print(), 500);
             } else {
                 alert('Por favor, permita ventanas emergentes para imprimir.');
