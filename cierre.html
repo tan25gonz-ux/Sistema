@@ -189,9 +189,6 @@
                     else if (data.tipo === "Deposito") deudaCalculada -= monto; 
                 });
                 
-                // 💰 CORRECCIÓN: El depósito del jefe es un préstamo, por lo tanto AUMENTA la deuda.
-                deudaCalculada += obtenerTotalDepositos();
-
                 document.getElementById('deudaTotalTxt').innerText = deudaCalculada.toLocaleString('es-CR');
             } catch (error) {
                 console.error("Error calculando la deuda: ", error);
@@ -390,14 +387,12 @@
             document.getElementById('depositoMontoInput').value = "";
 
             actualizarTablaDepositos();
-            calcularDeudaTotal(); // Actualiza la deuda (sumando el depósito)
         };
 
         window.eliminarDepositoLista = (index) => {
             listaDepositosDia.splice(index, 1);
             localStorage.setItem(`depositos_${sucursalActual}`, JSON.stringify(listaDepositosDia));
             actualizarTablaDepositos();
-            calcularDeudaTotal(); // Actualiza la deuda (restando el depósito eliminado)
         };
 
         function obtenerTotalDepositos() {
