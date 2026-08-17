@@ -38,10 +38,9 @@
         let totalAcumuladoComprasDia = 0;
         let sucursalActual = "Desconocida";
 
-        // ✅ NUEVAS VARIABLES: Para las secuencias y el ahorro de escrituras
         let secuenciaActiva = ''; 
         const ID_SECUNDARIA = '1144'; 
-        let temporizadorFirestore = null; // 🛑 VARIABLE DE CONTROL PARA DEBOUNCE
+        let temporizadorFirestore = null; 
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -78,9 +77,7 @@
                 await calcularDeudaTotal();
                 await cargarUltimoCierre();
                 
-                // Cargar los números de ambas secuencias al iniciar
                 await cargarNumerosSecuencias();
-                // Activar por defecto la secuencia base
                 await cambiarSecuencia('default');
 
                 actualizarTablaGeneralDia(); 
@@ -92,16 +89,13 @@
             }
         });
 
-        // ✅ NUEVA FUNCIÓN: Carga los números actuales de AMBAS secuencias para mostrarlos en los botones
         async function cargarNumerosSecuencias() {
             try {
-                // Cargar la secuencia base
                 const refBase = doc(db, "contadores_facturas", sucursalActual);
                 const snapBase = await getDoc(refBase);
                 const numBase = snapBase.exists() ? (snapBase.data().ultimo_numero || 0) + 1 : 1;
                 document.getElementById('num-default').innerText = numBase;
 
-                // Cargar la secuencia secundaria (1144)
                 const refSec = doc(db, "contadores_facturas", `${sucursalActual}_${ID_SECUNDARIA}`);
                 const snapSec = await getDoc(refSec);
                 const numSec = snapSec.exists() ? (snapSec.data().ultimo_numero || 0) + 1 : 1;
@@ -112,7 +106,6 @@
             }
         }
 
-        // ✅ NUEVA FUNCIÓN: Cambia la secuencia activa y actualiza los estilos visuales
         window.cambiarSecuencia = async function(tipo) {
             secuenciaActiva = (tipo === 'default') ? '' : ID_SECUNDARIA;
             
@@ -134,7 +127,6 @@
             await obtenerSiguienteNumeroFacturaActual();
         }
 
-        // ✅ NUEVA FUNCIÓN: Obtiene el siguiente número de la secuencia actualmente activa
         async function obtenerSiguienteNumeroFacturaActual() {
             try {
                 const idContador = secuenciaActiva ? `${sucursalActual}_${secuenciaActiva}` : sucursalActual;
@@ -383,7 +375,6 @@
                     ultima_actualizacion: serverTimestamp()
                 }, { merge: true });
 
-                // Guardar el contador de la secuencia activa
                 const idContador = secuenciaActiva ? `${sucursalActual}_${secuenciaActiva}` : sucursalActual;
                 const docRef = doc(db, "contadores_facturas", idContador);
                 const docSnap = await getDoc(docRef);
@@ -428,7 +419,6 @@
             document.getElementById('subtotalFacturaTxt').innerText = "0";
         }
 
-        // --- GESTIÓN DE DEPÓSITOS (AGREGAR PLATA) ---
         window.agregarDepositoLista = () => {
             const desc = document.getElementById('depositoDescInput').value.trim();
             const monto = obtenerNumeroLimpio('depositoMontoInput');
@@ -481,7 +471,6 @@
             calcularCajaDinamica();
         }
 
-        // --- GESTIÓN DE GASTOS ---
         window.agregarGastoLista = () => {
             const desc = document.getElementById('gastoDescInput').value.trim();
             const monto = obtenerNumeroLimpio('gastoMontoInput');
@@ -548,8 +537,6 @@
             return parseFloat(textoLimpio) || 0;
         }
 
-        // --- LÓGICA PRINCIPAL: CALCULAR Y TRANSMITIR CAJA EN TIEMPO REAL ---
-        // 🛑 OPTIMIZACIÓN DE ESCRITURAS: Solo actualiza Firestore si el usuario deja de escribir por 1 segundo.
         window.calcularCajaDinamica = () => {
             const inicioBase = obtenerNumeroLimpio('cajaInicioBase');
             const ventas = obtenerNumeroLimpio('ventas');
@@ -565,11 +552,10 @@
             localStorage.setItem(`cajaInicioBase_${sucursalActual}`, document.getElementById('cajaInicioBase').value);
             localStorage.setItem(`ventas_${sucursalActual}`, document.getElementById('ventas').value);
 
-            // 🛑 Cancelar el temporizador anterior y establecer uno nuevo (DEBOUNCE)
             clearTimeout(temporizadorFirestore);
             temporizadorFirestore = setTimeout(() => {
                 actualizarCajaFirestore(disponibleCaja);
-            }, 1000); // 1 segundo de espera después de la última pulsación de tecla
+            }, 1000);
         };
 
         async function actualizarCajaFirestore(disponible) {
@@ -838,7 +824,6 @@
         .box-ultimo-cierre { background: #edf2f7; border-left: 4px solid #3182ce; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #2d3748; }
         .btn-print { background: #2b6cb0; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
 
-        /* NUEVO ESTILO PARA LOS SELECTORES DE SECUENCIA */
         .seq-box {
             border: 2px solid #e2e8f0;
             border-radius: 8px;
@@ -915,11 +900,11 @@
                     </div>
                     <div>
                         <label># Número de Factura</label>
-                        <input type="text" id="numFacturaCliente" placeholder="Automático" style="border: 1px solid #2b6cb0; font-weight: bold; background: #fff;" readonly>
+                        <!-- ✅ CAMBIO: Quitado el atributo "readonly", ahora es editable -->
+                        <input type="text" id="numFacturaCliente" placeholder="Automático" style="border: 1px solid #2b6cb0; font-weight: bold; background: #fff;">
                     </div>
                 </div>
 
-                <!-- SELECTOR DE SECUENCIA VISUAL -->
                 <div style="grid-column: 1 / -1; margin-top: 10px;">
                     <label>Seleccionar Secuencia de Facturación Activa:</label>
                     <div style="display: flex; gap: 12px; margin-top: 5px;">
@@ -999,7 +984,6 @@
                 <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;">
                     <div>
                         <label>Inicio de Caja Base (₡)</label>
-                        <!-- ✅ AGREGADO onchange para ahorrar escrituras y optimizar -->
                         <input type="text" id="cajaInicioBase" placeholder="ej: 1 000 000" oninput="formatearInputMoneda(this)" onchange="calcularCajaDinamica()">
                     </div>
                     <div>
@@ -1008,7 +992,6 @@
                     </div>
                     <div>
                         <label>Ventas del Día (₡)</label>
-                        <!-- ✅ AGREGADO onchange para ahorrar escrituras y optimizar -->
                         <input type="text" id="ventas" oninput="formatearInputMoneda(this)" onchange="calcularCajaDinamica()">
                     </div>
                     <div>
