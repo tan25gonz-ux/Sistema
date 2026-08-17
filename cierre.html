@@ -3,38 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Control Admin - Monitoreo en Tiempo Real</title>
-    <style>
-        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; background: #f0f2f5; margin: 0; color: #333; }
-        .header-panel { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-        .grid-cajas { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
-        .card-caja { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-top: 5px solid #1a73e8; }
-        .monto-vivo { font-size: 28px; font-weight: bold; color: #2e7d32; margin: 12px 0; background: #e8f5e9; padding: 10px; border-radius: 10px; text-align: center; }
-        .badge-live { background: #e3f2fd; color: #1976d2; padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; display: inline-flex; align-items: center; gap: 4px; }
-        .dot { width: 8px; height: 8px; background: #2e7d32; border-radius: 50%; display: inline-block; animation: blink 1.5s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-        .detalle-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; font-size: 14px; }
-        .detalle-item span { font-weight: 600; }
-        .monto-pos { color: #2b6cb0; }
-        .monto-neg { color: #c53030; }
-    </style>
-</head>
-<body>
-
-    <div class="header-panel">
-        <div>
-            <h2 style="margin:0; color:#1a73e8;">🔴 Panel de Administración</h2>
-            <small style="color:#666;">Monitoreo de cajas y arqueos en tiempo real</small>
-        </div>
-    </div>
-
-    <div id="contenedor-cajas" class="grid-cajas">
-        <p style="color:#666;">Cargando cajas de sucursales en vivo...</p>
-    </div>
-
+    <title>Sistema de Facturación y Cierre - Sucursal</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, addDoc, writeBatch, serverTimestamp, query, where, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCi409CkmXBbun7-POejbVaIiThK2nZ1JY",
@@ -44,60 +17,1037 @@
             messagingSenderId: "921713515466",
             appId: "1:921713515466:web:0e2bcb5d67067068570d33"
         };
-
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
 
-        // --- ESCUCHADOR EN TIEMPO REAL CON ONSNAPSHOT ---
-        onSnapshot(collection(db, "cajas_en_vivo"), (snapshot) => {
-            const contenedor = document.getElementById('contenedor-cajas');
-            contenedor.innerHTML = "";
+        const listaMaterialesBase = [
+            "ACERO INOXIDABLE", "ALUMINIO", "BATERIA CARRO", "BRONCE", "CARTON", 
+            "CATALIZADOR", "CHATARRA", "COBRE", "GALONES", "PET", "TETRABRIK", 
+            "TARJETA", "LAVADORAS", "MOTORES", "LATAS ALUMINIO", "PAPEL REVUELTO", 
+            "PAPEL BLANCO", "PAPEL COLOR", "PERIODICO", "RADIADOR Cobre Bronce", 
+            "RADIADOR Cobre Aluminio", "RADIADOR ALUMINIO", "CAJA PLASTICA", 
+            "BOLSA TRANSPAR.", "BOLSA COLOR", "VIDRIO", "CABLE ELECTRICO", "OTROS"
+        ];
 
-            if (snapshot.empty) {
-                contenedor.innerHTML = "<p>No hay cajas activas registradas en este momento.</p>";
+        let preciosTrabajador = {};
+        let facturasDelDia = []; 
+        let listaGastosDia = []; 
+        let listaDepositosDia = []; 
+        let uidTrabajador = null;
+        let totalAcumuladoComprasDia = 0;
+        let sucursalActual = "Desconocida";
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                uidTrabajador = user.uid;
+                const emailUsuario = user.email ? user.email.toLowerCase().trim() : "";
+
+                if (emailUsuario.includes("perez")) {
+                    sucursalActual = "Perez";
+                } else if (emailUsuario.includes("paraiso")) { 
+                    sucursalActual = "Paraiso";
+                } else if (emailUsuario.includes("cartago")) {
+                    sucursalActual = "Cartago";
+                } else {
+                    sucursalActual = "Desconocida";
+                }
+
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('modulo-principal').style.display = 'grid';
+                document.getElementById('sucursal-txt').innerText = sucursalActual;
+                
+                const facturasGuardadas = localStorage.getItem(`facturas_${sucursalActual}`);
+                if (facturasGuardadas) facturasDelDia = JSON.parse(facturasGuardadas);
+
+                const gastosGuardados = localStorage.getItem(`gastos_${sucursalActual}`);
+                if (gastosGuardados) listaGastosDia = JSON.parse(gastosGuardados);
+
+                const depositosGuardados = localStorage.getItem(`depositos_${sucursalActual}`);
+                if (depositosGuardados) listaDepositosDia = JSON.parse(depositosGuardados);
+
+                document.getElementById('cajaInicioBase').value = localStorage.getItem(`cajaInicioBase_${sucursalActual}`) || "";
+                document.getElementById('ventas').value = localStorage.getItem(`ventas_${sucursalActual}`) || "";
+
+                await cargarPreciosDesdeFirebase();
+                await calcularDeudaTotal();
+                await cargarUltimoCierre();
+                await obtenerSiguienteNumeroFactura();
+                actualizarTablaGeneralDia(); 
+                actualizarTablaGastos();
+                actualizarTablaDepositos();
+            } else {
+                document.getElementById('login-section').style.display = 'block';
+                document.getElementById('modulo-principal').style.display = 'none';
+            }
+        });
+
+        window.cambiarSerieFactura = async function() {
+            await obtenerSiguienteNumeroFactura();
+        }
+
+        async function obtenerSiguienteNumeroFactura() {
+            try {
+                const serieIngresada = document.getElementById('serieFactura').value.trim();
+                // Si el usuario pone una serie, el contador se guarda por separado para esa serie
+                const idContador = serieIngresada ? `${sucursalActual}_${serieIngresada}` : sucursalActual;
+
+                const docRef = doc(db, "contadores_facturas", idContador);
+                const docSnap = await getDoc(docRef);
+                let siguienteNum = 1;
+
+                if (docSnap.exists()) {
+                    siguienteNum = (docSnap.data().ultimo_numero || 0) + 1;
+                }
+                document.getElementById('numFacturaCliente').value = siguienteNum;
+            } catch (error) {
+                console.error("Error al obtener número de factura:", error);
+            }
+        }
+
+        async function cargarUltimoCierre() {
+            try {
+                const q = query(
+                    collection(db, "revisiones_faltantes"),
+                    where("sucursal", "==", sucursalActual),
+                    orderBy("timestamp", "desc"),
+                    limit(1)
+                );
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    const datos = snap.docs[0].data();
+                    const inicio = parseFloat(datos.caja_inicio) || 0;
+                    const cierre = parseFloat(datos.cierre_mano) || 0;
+
+                    document.getElementById('infoUltimoCierre').innerHTML = `
+                        <b>📥 Dinero Base Inicial:</b> ₡${inicio.toLocaleString('es-CR')} | 
+                        <b>📤 Disponible al Cierre:</b> ₡${cierre.toLocaleString('es-CR')} 
+                        <small style="color:#718096;">(${datos.fecha || ''})</small>
+                    `;
+                } else {
+                    document.getElementById('infoUltimoCierre').innerText = "No se encontraron cierres previos registrados.";
+                }
+            } catch (error) {
+                console.error("Error consultando último cierre: ", error);
+            }
+        }
+
+        async function cargarPreciosDesdeFirebase() {
+            const pDoc = await getDoc(doc(db, "config_precios", uidTrabajador));
+            preciosTrabajador = pDoc.exists() ? (pDoc.data().materiales || {}) : {};
+            cargarTablaPreciosVisual();
+            cargarTablaListaMateriales();
+            cargarSelectEdicionPrecios();
+        }
+
+        function cargarTablaListaMateriales() {
+            const tbody = document.getElementById('body-lista-facturacion');
+            tbody.innerHTML = "";
+
+            listaMaterialesBase.forEach((mat, idx) => {
+                const precio = preciosTrabajador[mat] || 0;
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-weight:600; font-size:12px;">${mat}</td>
+                        <td style="font-size:12px; color:#666;">₡${precio.toLocaleString('es-CR')}</td>
+                        <td>
+                            <input type="number" step="any" id="kg_${idx}" data-mat="${mat}" data-precio="${precio}" 
+                            placeholder="0.0" oninput="calcularTotalFila(this, 'monto_${idx}')" style="height:32px; padding:4px; font-size:13px;">
+                        </td>
+                        <td>
+                            <input type="text" id="monto_${idx}" class="monto-fila" readonly value="₡0" 
+                            style="height:32px; padding:4px; font-size:13px; font-weight:bold; background:#e2e8f0; border:none;">
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        window.calcularTotalFila = (inputKg, idMonto) => {
+            const kg = parseFloat(inputKg.value) || 0;
+            const precio = parseFloat(inputKg.dataset.precio) || 0;
+            const total = kg * precio;
+            document.getElementById(idMonto).value = "₡" + total.toLocaleString('es-CR');
+            calcularSubtotalLista();
+        };
+
+        function calcularSubtotalLista() {
+            let subtotal = 0;
+            listaMaterialesBase.forEach((mat, idx) => {
+                const inputKg = document.getElementById(`kg_${idx}`);
+                if (inputKg) {
+                    const kg = parseFloat(inputKg.value) || 0;
+                    const precio = parseFloat(inputKg.dataset.precio) || 0;
+                    subtotal += (kg * precio);
+                }
+            });
+            document.getElementById('subtotalFacturaTxt').innerText = subtotal.toLocaleString('es-CR');
+        }
+
+        async function calcularDeudaTotal() {
+            try {
+                const q = query(collection(db, "movimientos_cuenta"), where("sucursal", "==", sucursalActual));
+                const querySnapshot = await getDocs(q);
+                
+                let deudaCalculada = 0;
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const monto = parseFloat(data.monto) || 0;
+                    if (data.tipo === "Salida_Venta") deudaCalculada += monto; 
+                    else if (data.tipo === "Deposito") deudaCalculada -= monto; 
+                });
+                
+                document.getElementById('deudaTotalTxt').innerText = deudaCalculada.toLocaleString('es-CR');
+            } catch (error) {
+                console.error("Error calculando la deuda: ", error);
+            }
+        }
+
+        window.login = async () => {
+            try {
+                await signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('pass').value);
+            } catch(e) { alert("Error: " + e.message); }
+        };
+
+        window.logout = () => signOut(auth);
+
+        function cargarTablaPreciosVisual() {
+            const tbody = document.getElementById('body-lista-precios');
+            tbody.innerHTML = "";
+            let tienePrecios = false;
+            for (const [material, precio] of Object.entries(preciosTrabajador)) {
+                if (precio > 0) {
+                    tienePrecios = true;
+                    tbody.innerHTML += `<tr><td>${material}</td><td><b>₡${precio.toLocaleString('es-CR')}</b></td></tr>`;
+                }
+            }
+            if(!tienePrecios) {
+                tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:#999;">No hay precios configurados.</td></tr>`;
+            }
+        }
+
+        function cargarSelectEdicionPrecios() {
+            const selectEdicion = document.getElementById('editMatSelect');
+            selectEdicion.innerHTML = "";
+            listaMaterialesBase.forEach(mat => {
+                selectEdicion.innerHTML += `<option value="${mat}">${mat}</option>`;
+            });
+            actualizarPrecioEnEdicion();
+        }
+
+        window.actualizarPrecioEnEdicion = () => {
+            const mat = document.getElementById('editMatSelect').value;
+            document.getElementById('editMatPrecio').value = preciosTrabajador[mat] || 0;
+        };
+
+        window.guardarPrecioFirebase = async function() {
+            const mat = document.getElementById('editMatSelect').value;
+            const nuevoPrecio = parseFloat(document.getElementById('editMatPrecio').value) || 0;
+            if(nuevoPrecio < 0) return;
+
+            const btn = document.getElementById('btnGuardarPrecio');
+            btn.disabled = true;
+
+            preciosTrabajador[mat] = nuevoPrecio;
+            try {
+                await setDoc(doc(db, "config_precios", uidTrabajador), { materiales: preciosTrabajador }, { merge: true });
+                alert(`✅ Precio actualizado.`);
+                cargarTablaPreciosVisual();
+                cargarTablaListaMateriales();
+            } catch (error) { alert("Error: " + error.message); }
+            finally { btn.disabled = false; btn.innerText = "💾 Guardar Precio"; }
+        };
+
+        window.toggleSeccionPrecios = () => {
+            const div = document.getElementById('seccion-editar-precios');
+            div.style.display = (div.style.display === 'none') ? 'block' : 'none';
+        };
+
+        window.validarCedulaTSE = async function() {
+            const cedulaInput = document.getElementById('cedulaCliente').value.trim();
+            const btn = document.getElementById('btnValidarCed');
+            const cedulaLimpia = cedulaInput.replace(/-/g, '');
+
+            if(!cedulaLimpia) { alert("Ingrese una cédula."); return; }
+            btn.innerText = "⚡..."; btn.disabled = true;
+
+            try {
+                const docRef = doc(db, "clientes", cedulaLimpia);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    document.getElementById('nombreCliente').value = docSnap.data().nombre;
+                    document.getElementById('nombreCliente').readOnly = true; 
+                } else {
+                    alert("ℹ️ Cliente nuevo. Por favor, digite el nombre completo manualmente.");
+                    document.getElementById('nombreCliente').value = "";
+                    document.getElementById('nombreCliente').readOnly = false;
+                    document.getElementById('nombreCliente').focus();
+                }
+            } catch (error) { 
+                alert("Error al buscar en la base de datos."); 
+            } finally { 
+                btn.innerText = "🔎"; 
+                btn.disabled = false; 
+            }
+        };
+
+        window.guardarFacturaCompletaCliente = async function() {
+            const cedula = document.getElementById('cedulaCliente').value.trim();
+            const nombre = document.getElementById('nombreCliente').value.trim();
+            let numFactura = document.getElementById('numFacturaCliente').value.trim();
+            const serie = document.getElementById('serieFactura').value.trim();
+            const cedulaLimpia = cedula.replace(/-/g, '');
+
+            if (!cedulaLimpia || !nombre || !numFactura) {
+                alert("⚠️ Debe ingresar la Cédula, el Nombre y el Número de Factura.");
                 return;
             }
 
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                const hora = data.ultima_actualizacion ? new Date(data.ultima_actualizacion.toDate()).toLocaleTimeString() : 'En espera';
+            let numFacturaInt = parseInt(numFactura);
+            if (isNaN(numFacturaInt) || numFacturaInt < 1) {
+                alert("⚠️ El número de factura debe ser un número entero positivo.");
+                return;
+            }
 
-                contenedor.innerHTML += `
-                    <div class="card-caja">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h3 style="margin:0; color:#2d3748;">📍 Sucursal ${data.sucursal}</h3>
-                            <span class="badge-live"><span class="dot"></span> EN VIVO (${hora})</span>
-                        </div>
+            let materialesIngresados = [];
+            listaMaterialesBase.forEach((mat, idx) => {
+                const inputKg = document.getElementById(`kg_${idx}`);
+                if (inputKg) {
+                    const kilos = parseFloat(inputKg.value) || 0;
+                    const precio_u = parseFloat(inputKg.dataset.precio) || 0;
+                    if (kilos > 0) {
+                        materialesIngresados.push({
+                            material: mat,
+                            kilos: kilos,
+                            precio_unitario: precio_u,
+                            total_pago: kilos * precio_u
+                        });
+                    }
+                }
+            });
 
-                        <label style="font-size:12px; color:#666; font-weight:bold; display:block; margin-top:10px;">Caja Disponible Actual</label>
-                        <div class="monto-vivo">₡${(data.caja_disponible || 0).toLocaleString('es-CR')}</div>
-                        
-                        <div style="margin-top:15px;">
-                            <div class="detalle-item">
-                                <span>📥 Base Inicio:</span>
-                                <b>₡${(data.caja_inicio || 0).toLocaleString('es-CR')}</b>
-                            </div>
-                            <div class="detalle-item">
-                                <span>➕ Plata Agregada (Depósitos):</span>
-                                <b class="monto-pos">+₡${(data.depositos || 0).toLocaleString('es-CR')}</b>
-                            </div>
-                            <div class="detalle-item">
-                                <span>➕ Ventas Registradas:</span>
-                                <b class="monto-pos">+₡${(data.ventas || 0).toLocaleString('es-CR')}</b>
-                            </div>
-                            <div class="detalle-item">
-                                <span>➖ Pagado en Facturas:</span>
-                                <b class="monto-neg">-₡${(data.compras_facturas || 0).toLocaleString('es-CR')}</b>
-                            </div>
-                            <div class="detalle-item">
-                                <span>➖ Gastos Varios:</span>
-                                <b class="monto-neg">-₡${(data.gastos || 0).toLocaleString('es-CR')}</b>
-                            </div>
+            if (materialesIngresados.length === 0) {
+                alert("⚠️ Ingrese el pesaje (kg) en al menos un material.");
+                return;
+            }
+
+            try {
+                await setDoc(doc(db, "clientes", cedulaLimpia), {
+                    nombre: nombre,
+                    ultima_actualizacion: serverTimestamp()
+                }, { merge: true });
+
+                // Actualizar contador de la serie específica
+                const idContador = serie ? `${sucursalActual}_${serie}` : sucursalActual;
+                const docRef = doc(db, "contadores_facturas", idContador);
+                const docSnap = await getDoc(docRef);
+                let ultimoNum = 0;
+                if (docSnap.exists()) {
+                    ultimoNum = docSnap.data().ultimo_numero || 0;
+                }
+                if (numFacturaInt > ultimoNum) {
+                    await setDoc(docRef, {
+                        ultimo_numero: numFacturaInt
+                    }, { merge: true });
+                }
+            } catch (err) {
+                console.error("Error guardando cliente o contador: ", err);
+            }
+
+            let totalFactura = materialesIngresados.reduce((sum, item) => sum + item.total_pago, 0);
+
+            facturasDelDia.push({
+                num_factura: numFactura,
+                serie: serie,
+                cedula: cedulaLimpia,
+                nombre,
+                detalles_materiales: materialesIngresados,
+                total_factura: totalFactura
+            });
+
+            localStorage.setItem(`facturas_${sucursalActual}`, JSON.stringify(facturasDelDia));
+
+            actualizarTablaGeneralDia();
+            limpiarFormularioFactura();
+            await obtenerSiguienteNumeroFactura();
+            document.getElementById('cedulaCliente').focus();
+        };
+
+        function limpiarFormularioFactura() {
+            document.getElementById('cedulaCliente').value = "";
+            document.getElementById('nombreCliente').value = "";
+            document.getElementById('nombreCliente').readOnly = false;
+            cargarTablaListaMateriales();
+            document.getElementById('subtotalFacturaTxt').innerText = "0";
+        }
+
+        // --- GESTIÓN DE DEPÓSITOS (AGREGAR PLATA) ---
+        window.agregarDepositoLista = () => {
+            const desc = document.getElementById('depositoDescInput').value.trim();
+            const monto = obtenerNumeroLimpio('depositoMontoInput');
+
+            if (monto <= 0) {
+                alert("⚠️ Ingrese un monto válido para la entrada de dinero.");
+                return;
+            }
+
+            listaDepositosDia.push({ descripcion: desc || "Entrada / Depósito", monto: monto });
+            localStorage.setItem(`depositos_${sucursalActual}`, JSON.stringify(listaDepositosDia));
+
+            document.getElementById('depositoDescInput').value = "";
+            document.getElementById('depositoMontoInput').value = "";
+
+            actualizarTablaDepositos();
+        };
+
+        window.eliminarDepositoLista = (index) => {
+            listaDepositosDia.splice(index, 1);
+            localStorage.setItem(`depositos_${sucursalActual}`, JSON.stringify(listaDepositosDia));
+            actualizarTablaDepositos();
+        };
+
+        function obtenerTotalDepositos() {
+            return listaDepositosDia.reduce((sum, d) => sum + d.monto, 0);
+        }
+
+        function actualizarTablaDepositos() {
+            const tbody = document.getElementById('body-depositos-lista');
+            tbody.innerHTML = "";
+            let total = 0;
+
+            if (listaDepositosDia.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#999;">No hay dinero extra agregado.</td></tr>`;
+            } else {
+                listaDepositosDia.forEach((dep, idx) => {
+                    total += dep.monto;
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${dep.descripcion}</td>
+                            <td><b>+₡${dep.monto.toLocaleString('es-CR')}</b></td>
+                            <td style="width:40px; text-align:center;"><button onclick="eliminarDepositoLista(${idx})" class="btn-del">x</button></td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('depositosRecibidosTxt').value = "₡" + total.toLocaleString('es-CR');
+            calcularCajaDinamica();
+        }
+
+        // --- GESTIÓN DE GASTOS ---
+        window.agregarGastoLista = () => {
+            const desc = document.getElementById('gastoDescInput').value.trim();
+            const monto = obtenerNumeroLimpio('gastoMontoInput');
+
+            if (!desc || monto <= 0) {
+                alert("⚠️ Ingrese una descripción y un monto válido para el gasto.");
+                return;
+            }
+
+            listaGastosDia.push({ descripcion: desc, monto: monto });
+            localStorage.setItem(`gastos_${sucursalActual}`, JSON.stringify(listaGastosDia));
+
+            document.getElementById('gastoDescInput').value = "";
+            document.getElementById('gastoMontoInput').value = "";
+
+            actualizarTablaGastos();
+        };
+
+        window.eliminarGastoLista = (index) => {
+            listaGastosDia.splice(index, 1);
+            localStorage.setItem(`gastos_${sucursalActual}`, JSON.stringify(listaGastosDia));
+            actualizarTablaGastos();
+        };
+
+        function obtenerTotalGastos() {
+            return listaGastosDia.reduce((sum, g) => sum + g.monto, 0);
+        }
+
+        function actualizarTablaGastos() {
+            const tbody = document.getElementById('body-gastos-lista');
+            tbody.innerHTML = "";
+            let total = 0;
+
+            if (listaGastosDia.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#999;">No hay gastos registrados hoy.</td></tr>`;
+            } else {
+                listaGastosDia.forEach((gasto, idx) => {
+                    total += gasto.monto;
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${gasto.descripcion}</td>
+                            <td><b>-₡${gasto.monto.toLocaleString('es-CR')}</b></td>
+                            <td style="width:40px; text-align:center;"><button onclick="eliminarGastoLista(${idx})" class="btn-del">x</button></td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('gastosFact').value = "₡" + total.toLocaleString('es-CR');
+            calcularCajaDinamica();
+        }
+
+        window.formatearInputMoneda = (input) => {
+            let valor = input.value.replace(/\D/g, "");
+            if (valor) input.value = Number(valor).toLocaleString('es-CR');
+            else input.value = "";
+            calcularCajaDinamica();
+        };
+
+        function obtenerNumeroLimpio(idElemento) {
+            const inputElement = document.getElementById(idElemento);
+            if (!inputElement || !inputElement.value) return 0;
+            const textoLimpio = inputElement.value.replace(/[\s.,₡]/g, "");
+            return parseFloat(textoLimpio) || 0;
+        }
+
+        // --- LÓGICA PRINCIPAL: CALCULAR Y TRANSMITIR CAJA EN TIEMPO REAL ---
+        window.calcularCajaDinamica = () => {
+            const inicioBase = obtenerNumeroLimpio('cajaInicioBase');
+            const ventas = obtenerNumeroLimpio('ventas');
+            const depositosPlata = obtenerTotalDepositos();
+            const pagoFacturas = totalAcumuladoComprasDia; 
+            const gastosFact = obtenerTotalGastos();
+
+            const disponibleCaja = (inicioBase + depositosPlata + ventas) - (pagoFacturas + gastosFact);
+
+            document.getElementById('cajaDisponibleActual').value = "₡" + disponibleCaja.toLocaleString('es-CR');
+            document.getElementById('cierreMano').value = "₡" + disponibleCaja.toLocaleString('es-CR');
+
+            localStorage.setItem(`cajaInicioBase_${sucursalActual}`, document.getElementById('cajaInicioBase').value);
+            localStorage.setItem(`ventas_${sucursalActual}`, document.getElementById('ventas').value);
+
+            actualizarCajaFirestore(disponibleCaja);
+        };
+
+        async function actualizarCajaFirestore(disponible) {
+            if (!sucursalActual || sucursalActual === "Desconocida") return;
+            try {
+                await setDoc(doc(db, "cajas_en_vivo", sucursalActual), {
+                    sucursal: sucursalActual,
+                    caja_inicio: obtenerNumeroLimpio('cajaInicioBase'),
+                    depositos: obtenerTotalDepositos(),
+                    ventas: obtenerNumeroLimpio('ventas'),
+                    compras_facturas: totalAcumuladoComprasDia,
+                    gastos: obtenerTotalGastos(),
+                    caja_disponible: disponible,
+                    ultima_actualizacion: serverTimestamp()
+                }, { merge: true });
+            } catch (e) {
+                console.error("Error sincronizando caja en vivo:", e);
+            }
+        }
+
+        function actualizarTablaGeneralDia() {
+            const tbody = document.getElementById('body-facturas-agregadas');
+            tbody.innerHTML = "";
+            totalAcumuladoComprasDia = 0;
+
+            let acumuladoMateriales = {};
+
+            if (facturasDelDia.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#999;">No hay facturas guardadas todavía.</td></tr>`;
+            } else {
+                facturasDelDia.forEach((fact, index) => {
+                    const montoFactura = parseFloat(fact.total_factura) || 0;
+                    totalAcumuladoComprasDia += montoFactura;
+                    let resumenMats = fact.detalles_materiales.map(m => `${m.material} (${m.kilos}kg)`).join(', ');
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><b>Fact: #${fact.num_factura}</b> ${fact.serie ? '('+fact.serie+')' : ''}</td>
+                            <td><b>${fact.nombre}</b><br><small style="color:#555">${fact.cedula}</small></td>
+                            <td style="max-width: 250px; font-size:11px; color:#444;">${resumenMats}</td>
+                            <td><b>₡${montoFactura.toLocaleString('es-CR')}</b></td>
+                            <td style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                <button onclick="imprimirFactura(${index})" class="btn-print" style="background:#2b6cb0; color:white; border:none; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:11px;">🖨️</button>
+                                <button onclick="eliminarFacturaGeneral(${index})" class="btn-del" style="background:#ff5252; color:white; border:none; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:11px;">x</button>
+                            </td>
+                        </tr>
+                    `;
+
+                    fact.detalles_materiales.forEach(m => {
+                        if (!acumuladoMateriales[m.material]) {
+                            acumuladoMateriales[m.material] = { kilos: 0, costo: 0 };
+                        }
+                        acumuladoMateriales[m.material].kilos += m.kilos;
+                        acumuladoMateriales[m.material].costo += (parseFloat(m.total_pago) || 0);
+                    });
+                });
+            }
+
+            document.getElementById('totalFacturasTxt').innerText = totalAcumuladoComprasDia.toLocaleString('es-CR');
+            document.getElementById('pagoMat').value = "₡" + totalAcumuladoComprasDia.toLocaleString('es-CR');
+
+            calcularCajaDinamica();
+            renderizarTablaAcumuladosDia(acumuladoMateriales);
+        }
+
+        window.eliminarFacturaGeneral = (index) => {
+            facturasDelDia.splice(index, 1);
+            localStorage.setItem(`facturas_${sucursalActual}`, JSON.stringify(facturasDelDia));
+            actualizarTablaGeneralDia();
+        };
+
+        window.imprimirFactura = (index) => {
+            const fact = facturasDelDia[index];
+            if (!fact) return;
+
+            const fecha = document.getElementById('fecha').value || new Date().toLocaleDateString('es-CR');
+            const detalles = fact.detalles_materiales.map(m => 
+                `<tr><td>${m.material}</td><td>${m.kilos} kg</td><td>₡${m.precio_unitario.toLocaleString('es-CR')}</td><td>₡${m.total_pago.toLocaleString('es-CR')}</td></tr>`
+            ).join('');
+
+            // Estilo CSS para impresora térmica 80mm
+            const contenido = `
+                <html>
+                <head><title>Factura #${fact.num_factura} ${fact.serie || ''}</title>
+                <style>
+                    @page { margin: 5mm; size: 80mm auto; }
+                    body { font-family: Arial, sans-serif; font-size: 12px; max-width: 72mm; margin: 0 auto; padding: 0; }
+                    h2 { text-align: center; font-size: 14px; margin: 5px 0; }
+                    .info { font-size: 11px; margin-bottom: 10px; }
+                    .info p { margin: 2px 0; }
+                    table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 11px; }
+                    th { background: #eee; text-align: left; padding: 4px; border-bottom: 1px solid #999; }
+                    td { padding: 4px; border-bottom: 1px solid #ddd; }
+                    .total { font-weight: bold; font-size: 13px; text-align: right; margin-top: 10px; border-top: 2px solid #333; padding-top: 5px; }
+                    .footer { margin-top: 15px; font-size: 10px; color: #555; text-align: center; }
+                </style>
+                </head>
+                <body>
+                    <h2>📍 ${sucursalActual}</h2>
+                    <h2>FACTURA #${fact.num_factura} ${fact.serie ? '('+fact.serie+')' : ''}</h2>
+                    <div class="info">
+                        <p><b>Fecha:</b> ${fecha}</p>
+                        <p><b>Cliente:</b> ${fact.nombre}</p>
+                        <p><b>Cédula:</b> ${fact.cedula}</p>
+                    </div>
+                    <table>
+                        <thead><tr><th>Material</th><th>Kg</th><th>₡/Kg</th><th>Total</th></tr></thead>
+                        <tbody>${detalles}</tbody>
+                    </table>
+                    <div class="total">Total: ₡${fact.total_factura.toLocaleString('es-CR')}</div>
+                    <div class="footer">Gracias por su visita</div>
+                </body>
+                </html>
+            `;
+
+            const ventana = window.open('', '_blank', 'width=800,height=600');
+            if (ventana) {
+                ventana.document.write(contenido);
+                ventana.document.close();
+                ventana.focus();
+                setTimeout(() => ventana.print(), 500);
+            } else {
+                alert('Por favor, permita ventanas emergentes para imprimir.');
+            }
+        };
+
+        window.enviarTodoFirebase = async function() {
+            if (facturasDelDia.length === 0) {
+                alert("❌ No hay facturas registradas hoy para cerrar.");
+                return;
+            }
+            if(!confirm("¿Desea enviar el cierre total y las facturas al sistema?")) return;
+
+            const btn = document.getElementById('btnEnviarTodo');
+            btn.disabled = true; btn.innerText = "Subiendo Datos...";
+
+            const fecha = document.getElementById('fecha').value;
+
+            try {
+                const batch = writeBatch(db);
+
+                const cierreRef = doc(collection(db, "revisiones_faltantes")); 
+                batch.set(cierreRef, {
+                    uid_trabajador: uidTrabajador, sucursal: sucursalActual, fecha,
+                    caja_inicio: obtenerNumeroLimpio('cajaInicioBase'),
+                    total_ventas: obtenerNumeroLimpio('ventas'),
+                    total_depositos: obtenerTotalDepositos(),
+                    detalles_depositos: listaDepositosDia,
+                    pago_materiales: totalAcumuladoComprasDia,
+                    gastos_facturas: obtenerTotalGastos(),
+                    detalles_gastos: listaGastosDia, // ✅ AHORA GUARDA LA DESCRIPCIÓN DE LOS GASTOS
+                    cierre_mano: obtenerNumeroLimpio('cierreMano'),
+                    estado: "Pendiente", timestamp: serverTimestamp()
+                });
+
+                facturasDelDia.forEach((factura) => {
+                    const factRef = doc(collection(db, "facturas_compras"));
+                    batch.set(factRef, {
+                        ...factura,
+                        cierre_id: cierreRef.id,
+                        sucursal: sucursalActual, fecha, uid_trabajador: uidTrabajador,
+                        timestamp: serverTimestamp()
+                    });
+                });
+
+                await batch.commit();
+                
+                localStorage.removeItem(`facturas_${sucursalActual}`);
+                localStorage.removeItem(`gastos_${sucursalActual}`);
+                localStorage.removeItem(`depositos_${sucursalActual}`);
+                localStorage.removeItem(`cajaInicioBase_${sucursalActual}`);
+                localStorage.removeItem(`ventas_${sucursalActual}`);
+
+                alert("✅ Cierre guardado con éxito.");
+                location.reload();
+            } catch (e) {
+                alert("Error: " + e.message);
+                btn.disabled = false; btn.innerText = "🚀 ENVIAR CIERRE Y FACTURAS DEL DÍA";
+            }
+        };
+
+        window.guardarMovimientoCuenta = async function() {
+            const tipo = document.getElementById('tipoMovimiento').value;
+            const monto = obtenerNumeroLimpio('montoMovimiento');
+            const fechaMov = document.getElementById('fechaMovimiento').value;
+            const motivo = document.getElementById('motivoMovimiento').value.trim();
+
+            if(!monto || monto <= 0 || !fechaMov) {
+                alert("⚠️ Por favor asigne una fecha y un monto válido.");
+                return;
+            }
+
+            const btn = document.getElementById('btnGuardarMov');
+            btn.disabled = true; btn.innerText = "Guardando...";
+
+            try {
+                await addDoc(collection(db, "movimientos_cuenta"), {
+                    uid_trabajador: uidTrabajador,
+                    sucursal: sucursalActual, 
+                    tipo: tipo, 
+                    monto: monto,
+                    fecha_operacion: fechaMov,
+                    motivo: motivo || "Sin especificación",
+                    timestamp: serverTimestamp()
+                });
+
+                alert(`✅ ${tipo} registrado correctamente.`);
+                document.getElementById('montoMovimiento').value = "";
+                document.getElementById('motivoMovimiento').value = "";
+                await calcularDeudaTotal(); 
+            } catch (error) {
+                alert("Error: " + error.message);
+            } finally {
+                btn.disabled = false; btn.innerText = "Registrar en Cuenta Externa";
+            }
+        };
+
+        function renderizarTablaAcumuladosDia(acumulado) {
+            const tbody = document.getElementById('body-materiales-totales-dia');
+            tbody.innerHTML = "";
+
+            if (Object.keys(acumulado).length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#999;">Sin movimientos en el día.</td></tr>`;
+                return;
+            }
+
+            for (const [material, datos] of Object.entries(acumulado)) {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><b>${material}</b></td>
+                        <td style="color:#1a73e8; font-weight:bold;">${datos.kilos.toFixed(1)} kg</td>
+                        <td><b>₡${datos.costo.toLocaleString('es-CR')}</b></td>
+                    </tr>
+                `;
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; padding: 12px; background: #f0f2f5; margin: 0; color: #333; }
+        .login-box { background: white; padding: 25px; max-width: 400px; margin: 60px auto; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; box-sizing: border-box; }
+        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        .grid-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; max-width: 1300px; margin: auto; }
+        .card { background: white; padding: 16px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); box-sizing: border-box; }
+        h3, h4, h5 { margin-top: 0; color: #1a73e8; }
+        label { font-size: 12px; font-weight: 600; color: #4a5568; display: block; margin-top: 10px; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 15px; background-color: #fff; height: 42px; -webkit-appearance: none; appearance: none; }
+        select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234a5568'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 16px; padding-right: 30px; }
+        .seccion-interna { background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 16px; box-sizing: border-box; }
+        .cedula-row { display: grid; grid-template-columns: 1fr 50px; gap: 6px; }
+        button { min-height: 42px; font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: background 0.2s; box-sizing: border-box; }
+        .btn-orange { background: #e67e22; color: white; border: none; margin-top: 5px; width: 100%; height: 42px; display: flex; align-items: center; justify-content: center; }
+        .btn-blue { background: #1a73e8; color: white; border: none; padding: 10px 16px; width: 100%; margin-top: 12px; }
+        .btn-del { background: #ff5252; color: white; border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; min-height: auto; font-size: 12px; }
+        .btn-green { width: 100%; padding: 14px; background: #2e7d32; color: white; border: none; border-radius: 10px; font-size: 16px; margin-top: 16px; }
+        .btn-save-fact { background: #2e7d32; color: white; border: none; padding: 12px; width: 100%; margin-top: 14px; font-size: 15px; }
+        .btn-work { background: #6b46c1; color: white; border: none; padding: 10px; width: 100%; }
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 8px; background: white; margin-top: 10px; }
+        .scroll-talonario { max-height: 380px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px; background: white; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 450px; }
+        th { text-align: left; background: #f1f5f9; padding: 10px; font-weight: 600; color: #475569; position: sticky; top: 0; z-index: 1; }
+        td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .subtotal-banner { text-align: right; font-weight: bold; padding: 10px; color: #1a73e8; font-size: 14px; background: #e8f0fe; border-radius: 8px; margin-top: 10px; }
+        .total-banner { text-align: right; font-weight: bold; padding: 12px; color: #2e7d32; font-size: 16px; background: #e8f5e9; border-radius: 8px; margin-top: 10px; }
+        .mini-deuda-box { background: #fff5f5; border: 1px solid #feb2b2; padding: 6px 12px; border-radius: 8px; font-size: 13px; color: #c53030; font-weight: bold; text-align: center; margin-bottom: 15px; }
+        .panel-lateral { background: white; padding: 16px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); height: max-content; box-sizing: border-box; }
+        .scroll-precios { max-height: 300px; overflow-y: auto; margin-bottom: 12px; border-radius: 8px; }
+        .box-ultimo-cierre { background: #edf2f7; border-left: 4px solid #3182ce; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #2d3748; }
+        .btn-print { background: #2b6cb0; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
+        @media(max-width: 850px) {
+            .grid-layout { grid-template-columns: 1fr; gap: 16px; }
+            body { padding: 8px; }
+            .card, .panel-lateral { padding: 12px; border-radius: 12px; }
+            .seccion-interna { padding: 10px; border-radius: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-section" class="login-box" style="display:none;">
+        <h2>📝 Ingreso de Sucursal</h2>
+        <input type="email" id="email" placeholder="Correo de la sucursal">
+        <input type="password" id="pass" placeholder="Contraseña">
+        <button class="btn-blue" onclick="login()">Ingresar al Sistema</button>
+    </div>
+
+    <div id="modulo-principal" class="grid-layout" style="display:none;">
+        
+        <div class="card">
+            <button onclick="logout()" style="float: right; background:#ff5252; color:white; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:bold; margin-left: 10px; min-height: auto;">Cerrar Sesión</button>
+            <h3>📍 Sucursal: <span id="sucursal-txt" style="color:#2e7d32">...</span></h3>
+            
+            <div class="box-ultimo-cierre">
+                <span style="font-weight:bold; color:#2b6cb0;">📌 ÚLTIMO CIERRE REALIZADO:</span>
+                <div id="infoUltimoCierre" style="margin-top:4px;">Cargando último cierre...</div>
+            </div>
+
+            <div style="max-width: 100%; margin-bottom:15px;">
+                <label>Fecha de Operación</label>
+                <input type="date" id="fecha">
+            </div>
+
+            <div class="seccion-interna" style="border: 1px solid #4299e1; background: #f0f8ff;">
+                <h4 style="margin-bottom:10px; color:#2b6cb0;">🛒 1. FACTURACIÓN ACTUAL (RECIBO DE MATERIAL)</h4>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+                    <div>
+                        <label>Cédula del Cliente</label>
+                        <div class="cedula-row">
+                            <input type="text" id="cedulaCliente" placeholder="Ej: 112340567">
+                            <button id="btnValidarCed" class="btn-orange" onclick="validarCedulaTSE()">🔎</button>
                         </div>
                     </div>
-                `;
-            });
-        });
-    </script>
+                    <div>
+                        <label>Nombre Completo</label>
+                        <input type="text" id="nombreCliente" placeholder="Nombre completo">
+                    </div>
+                    <div>
+                        <label># Número de Factura</label>
+                        <input type="text" id="numFacturaCliente" placeholder="Automático" style="border: 1px solid #2b6cb0; font-weight: bold; background: #fff;">
+                    </div>
+                    <div>
+                        <label>Serie / Tipo Factura</label>
+                        <input type="text" id="serieFactura" placeholder="Ej: A, Principal" onchange="cambiarSerieFactura()">
+                    </div>
+                </div>
+
+                <div class="scroll-talonario">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Detalle Material</th>
+                                <th>Precio (₡/Kg)</th>
+                                <th style="width:110px;">Cantidad (Kg)</th>
+                                <th style="width:130px;">Monto (₡)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="body-lista-facturacion"></tbody>
+                    </table>
+                </div>
+
+                <div class="subtotal-banner">
+                    Subtotal Factura: ₡<span id="subtotalFacturaTxt">0</span>
+                </div>
+
+                <button class="btn-save-fact" onclick="guardarFacturaCompletaCliente()">💾 GUARDAR FACTURA DE CLIENTE</button>
+            </div>
+
+            <div class="seccion-interna">
+                <h4>📋 2. FACTURAS REGISTRADAS HOY</h4>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th># Factura / Serie</th>
+                                <th>Cliente</th>
+                                <th>Detalle</th>
+                                <th>Monto</th>
+                                <th style="min-width: 80px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="body-facturas-agregadas"></tbody>
+                    </table>
+                </div>
+                <div class="total-banner">
+                    Total Compras del Día: ₡<span id="totalFacturasTxt">0</span>
+                </div>
+            </div>
+
+            <div class="seccion-interna">
+                <h4>📊 3. TOTALES POR MATERIAL COMPRADO HOY</h4>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Material</th>
+                                <th>Kilos Totales</th>
+                                <th>Costo Total (₡)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="body-materiales-totales-dia"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="seccion-interna" style="background:#f1f5f9;">
+                <h4>💵 4. CONTROL DE CAJA Y ARQUEO</h4>
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;">
+                    <div>
+                        <label>Inicio de Caja Base (₡)</label>
+                        <input type="text" id="cajaInicioBase" placeholder="ej: 1 000 000" oninput="formatearInputMoneda(this)">
+                    </div>
+                    <div>
+                        <label>💵 Caja Disponible Hoy (₡)</label>
+                        <input type="text" id="cajaDisponibleActual" readonly style="background:#e6fffa; font-weight:bold; color:#234e52; border:1px solid #319795;">
+                    </div>
+                    <div>
+                        <label>Ventas del Día (₡)</label>
+                        <input type="text" id="ventas" oninput="formatearInputMoneda(this)">
+                    </div>
+                    <div>
+                        <label>Plata Agregada / Depósitos (₡)</label>
+                        <input type="text" id="depositosRecibidosTxt" readonly style="background:#e2e8f0; font-weight:bold; color:#2b6cb0;">
+                    </div>
+                    <div>
+                        <label>Pagado en Facturas (₡)</label>
+                        <input type="text" id="pagoMat" readonly style="background:#e2e8f0; font-weight:bold; color:#c53030;">
+                    </div>
+                    <div>
+                        <label>Gastos Varios (₡)</label>
+                        <input type="text" id="gastosFact" readonly style="background:#e2e8f0; font-weight:bold; color:#c53030;">
+                    </div>
+                </div>
+
+                <div style="margin-top:15px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+                    <h5 style="color:#2b6cb0; margin-bottom:8px;">➕ Agregar Plata / Entrada de Dinero</h5>
+                    <div style="display:grid; grid-template-columns: 1fr 140px 100px; gap:8px;">
+                        <div>
+                            <input type="text" id="depositoDescInput" placeholder="Detalle (ej: Envío de plata)" style="height:36px; font-size:13px;">
+                        </div>
+                        <div>
+                            <input type="text" id="depositoMontoInput" placeholder="Monto (₡)" oninput="formatearInputMoneda(this)" style="height:36px; font-size:13px;">
+                        </div>
+                        <div>
+                            <button class="btn-blue" onclick="agregarDepositoLista()" style="margin-top:5px; height:36px; min-height:auto; font-size:13px; padding:0;">➕ Sumar</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="margin-top:8px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Detalle</th>
+                                    <th>Monto Agregado</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="body-depositos-lista"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="margin-top:15px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+                    <h5 style="color:#4a5568; margin-bottom:8px;">📌 Registro de Gastos Varios</h5>
+                    <div style="display:grid; grid-template-columns: 1fr 140px 100px; gap:8px;">
+                        <div>
+                            <input type="text" id="gastoDescInput" placeholder="Ej: Almuerzo, Gasolina" style="height:36px; font-size:13px;">
+                        </div>
+                        <div>
+                            <input type="text" id="gastoMontoInput" placeholder="Monto (₡)" oninput="formatearInputMoneda(this)" style="height:36px; font-size:13px;">
+                        </div>
+                        <div>
+                            <button class="btn-blue" onclick="agregarGastoLista()" style="margin-top:5px; height:36px; min-height:auto; font-size:13px; padding:0;">➕ Agregar</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="margin-top:8px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Descripción Gasto</th>
+                                    <th>Monto</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="body-gastos-lista"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="margin-top:15px;">
+                    <label>Efectivo Final en Mano (Al cerrar)</label>
+                    <input type="text" id="cierreMano" readonly style="background:#e2e8f0; font-weight:bold; color:#2e7d32; font-size:18px;">
+                </div>
+
+                <button id="btnEnviarTodo" class="btn-green" onclick="enviarTodoFirebase()">🚀 ENVIAR CIERRE Y FACTURAS DEL DÍA</button>
+            </div>
+        </div>
+
+        <div class="panel-lateral">
+            <div class="mini-deuda-box">
+                Deuda Total Sucursal:<br>
+                ₡<span id="deudaTotalTxt">0</span>
+            </div>
+
+            <button class="btn-work" onclick="toggleSeccionPrecios()">⚙️ Configurar Precios Materiales</button>
+
+            <div id="seccion-editar-precios" class="seccion-interna" style="display:none; margin-top:10px;">
+                <h5>Modificar Precio</h5>
+                <select id="editMatSelect" onchange="actualizarPrecioEnEdicion()"></select>
+                <label>Nuevo Precio Unitario (₡)</label>
+                <input type="number" id="editMatPrecio">
+                <button id="btnGuardarPrecio" class="btn-blue" onclick="guardarPrecioFirebase()">💾 Guardar Precio</button>
+            </div>
+
+            <h5 style="margin-top:15px; margin-bottom:5px;">Precios Vigentes</h5>
+            <div class="scroll-precios">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Material</th>
+                            <th>Precio/Kg</th>
+                        </tr>
+                    </thead>
+                    <tbody id="body-lista-precios"></tbody>
+                </table>
+            </div>
+
+            <div class="seccion-interna" style="margin-top:15px;">
+                <h5>🏦 Movimientos Cuenta Externa</h5>
+                <label>Tipo de Operación</label>
+                <select id="tipoMovimiento">
+                    <option value="Salida_Venta">Salida / Venta (+ Deuda)</option>
+                    <option value="Deposito">Depósito (- Deuda)</option>
+                </select>
+                
+                <label>Monto (₡)</label>
+                <input type="text" id="montoMovimiento" oninput="formatearInputMoneda(this)">
+                
+                <label>Fecha de Operación</label>
+                <input type="date" id="fechaMovimiento">
+
+                <label>Motivo / Detalle</label>
+                <input type="text" id="motivoMovimiento" placeholder="Ej: Depósito en banco">
+
+                <button id="btnGuardarMov" class="btn-blue" onclick="guardarMovimientoCuenta()">Registrar en Cuenta Externa</button>
+            </div>
+        </div>
+
+    </div>
+
 </body>
 </html>
