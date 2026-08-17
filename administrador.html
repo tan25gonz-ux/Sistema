@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control Admin - Monitoreo en Tiempo Real</title>
+    <style>
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; background: #f0f2f5; margin: 0; color: #333; }
+        .header-panel { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .grid-cajas { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+        .card-caja { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-top: 5px solid #1a73e8; }
+        .monto-vivo { font-size: 28px; font-weight: bold; color: #2e7d32; margin: 12px 0; background: #e8f5e9; padding: 10px; border-radius: 10px; text-align: center; }
+        .badge-live { background: #e3f2fd; color: #1976d2; padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; display: inline-flex; align-items: center; gap: 4px; }
+        .dot { width: 8px; height: 8px; background: #2e7d32; border-radius: 50%; display: inline-block; animation: blink 1.5s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        .detalle-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; font-size: 14px; }
+        .detalle-item span { font-weight: 600; }
+        .monto-pos { color: #2b6cb0; }
+        .monto-neg { color: #c53030; }
+    </style>
+</head>
+<body>
+
+    <div class="header-panel">
+        <div>
+            <h2 style="margin:0; color:#1a73e8;">🔴 Panel de Administración</h2>
+            <small style="color:#666;">Monitoreo de cajas y arqueos en tiempo real</small>
+        </div>
+    </div>
+
+    <div id="contenedor-cajas" class="grid-cajas">
+        <p style="color:#666;">Cargando cajas de sucursales en vivo...</p>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCi409CkmXBbun7-POejbVaIiThK2nZ1JY",
+            authDomain: "prestamos-18dd8.firebaseapp.com",
+            projectId: "prestamos-18dd8",
+            storageBucket: "prestamos-18dd8.firebasestorage.app",
+            messagingSenderId: "921713515466",
+            appId: "1:921713515466:web:0e2bcb5d67067068570d33"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- ESCUCHADOR EN TIEMPO REAL CON ONSNAPSHOT ---
+        onSnapshot(collection(db, "cajas_en_vivo"), (snapshot) => {
+            const contenedor = document.getElementById('contenedor-cajas');
+            contenedor.innerHTML = "";
+
+            if (snapshot.empty) {
+                contenedor.innerHTML = "<p>No hay cajas activas registradas en este momento.</p>";
+                return;
+            }
+
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const hora = data.ultima_actualizacion ? new Date(data.ultima_actualizacion.toDate()).toLocaleTimeString() : 'En espera';
+
+                contenedor.innerHTML += `
+                    <div class="card-caja">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="margin:0; color:#2d3748;">📍 Sucursal ${data.sucursal}</h3>
+                            <span class="badge-live"><span class="dot"></span> EN VIVO (${hora})</span>
+                        </div>
+
+                        <label style="font-size:12px; color:#666; font-weight:bold; display:block; margin-top:10px;">Caja Disponible Actual</label>
+                        <div class="monto-vivo">₡${(data.caja_disponible || 0).toLocaleString('es-CR')}</div>
+                        
+                        <div style="margin-top:15px;">
+                            <div class="detalle-item">
+                                <span>📥 Base Inicio:</span>
+                                <b>₡${(data.caja_inicio || 0).toLocaleString('es-CR')}</b>
+                            </div>
+                            <div class="detalle-item">
+                                <span>➕ Plata Agregada (Depósitos):</span>
+                                <b class="monto-pos">+₡${(data.depositos || 0).toLocaleString('es-CR')}</b>
+                            </div>
+                            <div class="detalle-item">
+                                <span>➕ Ventas Registradas:</span>
+                                <b class="monto-pos">+₡${(data.ventas || 0).toLocaleString('es-CR')}</b>
+                            </div>
+                            <div class="detalle-item">
+                                <span>➖ Pagado en Facturas:</span>
+                                <b class="monto-neg">-₡${(data.compras_facturas || 0).toLocaleString('es-CR')}</b>
+                            </div>
+                            <div class="detalle-item">
+                                <span>➖ Gastos Varios:</span>
+                                <b class="monto-neg">-₡${(data.gastos || 0).toLocaleString('es-CR')}</b>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        });
+    </script>
+</body>
+</html>

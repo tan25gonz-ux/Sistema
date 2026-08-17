@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Contenedores y Utilidades</title>
+    <style>
+        :root {
+            --surface: #ffffff;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --border-color: #e2e8f0;
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f8fafc;
+            margin: 0;
+            padding: 20px;
+            color: var(--text-dark);
+        }
+
+        .header-utilidades {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background: var(--surface);
+            padding: 16px 20px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .header-utilidades h2 { margin: 0; font-size: 20px; }
+
+        .btn-volver {
+            background: #475569;
+            color: white;
+            text-decoration: none;
+            padding: 9px 16px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
+
+        .card {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 20px;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            margin-bottom: 14px;
+            font-size: 16px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .form-group { margin-bottom: 12px; }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-sizing: border-box;
+            font-size: 13px;
+            height: 38px;
+            outline: none;
+        }
+
+        .btn-accion {
+            width: 100%;
+            background: #059669;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: var(--radius-md);
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .btn-accion:hover { background: #047857; }
+
+        .btn-filtrar {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: var(--radius-md);
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .btn-filtrar:hover { background: var(--primary-hover); }
+
+        .btn-reset {
+            width: 100%;
+            background: #e2e8f0;
+            color: #475569;
+            border: none;
+            padding: 8px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+
+        .status-box {
+            padding: 10px;
+            border-radius: var(--radius-md);
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            background: #e2e8f0;
+            color: #334155;
+            text-align: center;
+        }
+
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            padding: 16px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+        }
+
+        .kpi-card .label {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .kpi-card .value {
+            font-size: 18px;
+            font-weight: 800;
+            margin-top: 4px;
+        }
+
+        .kpi-caja { background: #f0fdf4; border-color: #bbf7d0; }
+        .kpi-caja .value { color: var(--success); font-size: 22px; }
+
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        th {
+            background: #f8fafc;
+            padding: 10px 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        td { padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+
+    <div class="header-utilidades">
+        <h2>🚢 Control de Contenedores y Utilidades (Base de Datos Real)</h2>
+        <a href="administrador.html" class="btn-volver">⬅️ Volver al Panel</a>
+    </div>
+
+    <div id="statusBD" class="status-box">⏳ Conectando con Firebase...</div>
+
+    <div class="grid-layout">
+        
+        <!-- Panel Izquierdo -->
+        <div>
+            <div class="card">
+                <h3>🔍 Filtro de Fechas y Sucursal</h3>
+                <div class="form-group">
+                    <label>Sucursal</label>
+                    <select id="selectSucursal">
+                        <option value="TODAS">🏢 Todas las Sucursales</option>
+                        <option value="Perez">Perez</option>
+                        <option value="Paraíso">Paraíso</option>
+                        <option value="Cartago">Cartago</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Fecha Inicio</label>
+                    <input type="date" id="fechaInicio">
+                </div>
+
+                <div class="form-group">
+                    <label>Fecha Fin</label>
+                    <input type="date" id="fechaFin">
+                </div>
+
+                <button class="btn-filtrar" onclick="aplicarFiltro()">🔍 Traer / Filtrar Datos</button>
+                <button class="btn-reset" onclick="limpiarFiltros()">↺ Ver Todos los Registros</button>
+                <button class="btn-reset" style="background:#cbd5e1; margin-top:10px;" onclick="cargarDatosBD()">🔄 Cargar de Nuevo BD</button>
+            </div>
+
+            <div class="card">
+                <h3>📦 Agregar Nuevo Contenedor</h3>
+                
+                <div class="form-group">
+                    <label>N° / Código de Contenedor</label>
+                    <input type="text" id="numContenedor" placeholder="Ej: CONT-2026-01">
+                </div>
+
+                <div class="form-group">
+                    <label>Fecha de Salida</label>
+                    <input type="date" id="fechaContenedor">
+                </div>
+
+                <div class="form-group">
+                    <label>Tipo de Material</label>
+                    <input type="text" id="matContenedor" placeholder="Ej: Chatarra, Aluminio, Cobre...">
+                </div>
+
+                <div class="form-group">
+                    <label>Kilos Cargados (Peso Neto)</label>
+                    <input type="number" id="kilosContenedor" placeholder="Ej: 20000">
+                </div>
+
+                <div class="form-group">
+                    <label>Precio Venta / Exportación (₡ por kg)</label>
+                    <input type="number" id="precioKgContenedor" placeholder="Ej: 165">
+                </div>
+
+                <button class="btn-accion" onclick="registrarContenedorBD()">🚢 Registrar y Despachar</button>
+            </div>
+        </div>
+
+        <!-- Panel Derecho -->
+        <div>
+            <div class="kpi-container">
+                <div class="kpi-card">
+                    <div class="label">🔴 Compras Facturadas</div>
+                    <div class="value" id="kpiSalidaCompras" style="color: var(--danger);">₡0</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="label">⚠️ Gastos (Revisiones / Faltantes)</div>
+                    <div class="value" id="kpiGastosCierre" style="color: var(--warning);">₡0</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="label">🟢 Ventas Contenedores</div>
+                    <div class="value" id="kpiEntradaVentas" style="color: var(--primary);">₡0</div>
+                </div>
+                <div class="kpi-card kpi-caja">
+                    <div class="label">💰 Flujo Real Neto En Caja</div>
+                    <div class="value" id="kpiFlujoNeto">₡0</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📊 Inventario en Patio (Calculado de Facturas Reales)</h3>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Material</th>
+                                <th>Kilos Comprados (Facturas)</th>
+                                <th>Kilos en Contenedores</th>
+                                <th>Kilos Restantes Patio</th>
+                                <th>Capital en Patio (Costo Est.)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bodyInventario">
+                            <tr><td colspan="5" style="text-align:center; color:#94a3b8; padding: 15px;">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>💡 Detalle de Gastos Operativos (revisiones_faltantes)</h3>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Sucursal</th>
+                                <th>Concepto</th>
+                                <th>Monto (gastos_facturas)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bodyGastos">
+                            <tr><td colspan="4" style="text-align:center; color:#94a3b8; padding: 15px;">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🚚 Registro de Contenedores Despachados</h3>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Fecha</th>
+                                <th>Material</th>
+                                <th>Kilos</th>
+                                <th>Precio / kg</th>
+                                <th>Total Cobrado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bodyContenedores">
+                            <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding: 15px;">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        let facturasBD = [];
+        let contenedoresBD = [];
+        let faltantesBD = [];
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDGCjpFS1spdyQcFzIjd-8S9GGkOe5fuX8",
+            authDomain: "prestamos-18dd8.firebaseapp.com",
+            projectId: "prestamos-18dd8",
+            storageBucket: "prestamos-18dd8.firebasestorage.app",
+            messagingSenderId: "921713515466",
+            appId: "1:921713515466:web:76f5719a9f208311570d33",
+            measurementId: "G-6WBW0C556Q"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        function normalizarTexto(txt) {
+            return (txt || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        }
+
+        function formatearNombre(txt) {
+            if (!txt) return "Sin Especificar";
+            const limpio = txt.trim();
+            return limpio.charAt(0).toUpperCase() + limpio.slice(1);
+        }
+
+        function mostrarEstado(mensaje, esError = false) {
+            const el = document.getElementById('statusBD');
+            el.innerText = mensaje;
+            el.style.background = esError ? '#fef2f2' : '#f0fdf4';
+            el.style.color = esError ? '#dc2626' : '#16a34a';
+        }
+
+        async function cargarDatosBD() {
+            mostrarEstado("⏳ Consultando Firestore (facturas_compras, contenedores y revisiones_faltantes)...");
+            try {
+                // 1. Facturas Compras
+                const snapFacturas = await db.collection("facturas_compras").get();
+                facturasBD = [];
+                snapFacturas.forEach(doc => facturasBD.push({ id: doc.id, ...doc.data() }));
+
+                // 2. Contenedores
+                const snapContenedores = await db.collection("contenedores").get();
+                contenedoresBD = [];
+                snapContenedores.forEach(doc => contenedoresBD.push({ id: doc.id, ...doc.data() }));
+
+                // 3. Revisiones y Faltantes / Gastos Operativos
+                const snapFaltantes = await db.collection("revisiones_faltantes").get();
+                faltantesBD = [];
+                snapFaltantes.forEach(doc => faltantesBD.push({ id: doc.id, ...doc.data() }));
+
+                mostrarEstado(`✅ Éxito: Se cargaron ${facturasBD.length} facturas, ${contenedoresBD.length} contenedores y ${faltantesBD.length} registros de revisiones/gastos.`);
+                procesarYRenderizar(facturasBD, contenedoresBD, faltantesBD);
+            } catch (error) {
+                console.error("Error al conectar:", error);
+                mostrarEstado(`❌ Error al conectar con Firestore: ${error.message}`, true);
+            }
+        }
+
+        function extraerMaterialesDeFactura(factura) {
+            const materiales = [];
+            
+            if (Array.isArray(factura.detalles_materiales)) {
+                factura.detalles_materiales.forEach(item => {
+                    materiales.push({
+                        material: item.material || item.nombre || item.descripcion || "Otros",
+                        kilos: parseFloat(item.kilos || item.cantidad || item.peso || 0),
+                        monto: parseFloat(item.total_pago || item.subtotal || item.precio_unitario || item.precio || 0)
+                    });
+                });
+            } else if (Array.isArray(factura.items)) {
+                factura.items.forEach(item => {
+                    materiales.push({
+                        material: item.material || item.nombre || item.descripcion || "Otros",
+                        kilos: parseFloat(item.kilos || item.cantidad || 0),
+                        monto: parseFloat(item.subtotal || item.precio || item.total_pago || 0)
+                    });
+                });
+            }
+            return materiales;
+        }
+
+        function aplicarFiltro() {
+            const sucursalSel = document.getElementById('selectSucursal').value;
+            const fInicio = document.getElementById('fechaInicio').value;
+            const fFin = document.getElementById('fechaFin').value;
+
+            const facturasFiltradas = facturasBD.filter(f => {
+                const coincideSuc = sucursalSel === "TODAS" || normalizarTexto(f.sucursal) === normalizarTexto(sucursalSel);
+                const fechaFact = f.fecha || "";
+                const coincideF = (!fInicio || fechaFact >= fInicio) && (!fFin || fechaFact <= fFin);
+                return coincideSuc && coincideF;
+            });
+
+            const faltantesFiltrados = faltantesBD.filter(f => {
+                const coincideSuc = sucursalSel === "TODAS" || normalizarTexto(f.sucursal) === normalizarTexto(sucursalSel);
+                const fechaFalt = f.fecha || "";
+                const coincideF = (!fInicio || fechaFalt >= fInicio) && (!fFin || fechaFalt <= fFin);
+                return coincideSuc && coincideF;
+            });
+
+            mostrarEstado(`🔍 Filtro aplicado: ${facturasFiltradas.length} facturas y ${faltantesFiltrados.length} registros de gastos.`);
+            procesarYRenderizar(facturasFiltradas, contenedoresBD, faltantesFiltrados);
+        }
+
+        function limpiarFiltros() {
+            document.getElementById('selectSucursal').value = "TODAS";
+            document.getElementById('fechaInicio').value = "";
+            document.getElementById('fechaFin').value = "";
+            mostrarEstado(`↺ Registros restablecidos (${facturasBD.length} facturas totales).`);
+            procesarYRenderizar(facturasBD, contenedoresBD, faltantesBD);
+        }
+
+        function procesarYRenderizar(facturasList, contenedoresList, faltantesList) {
+            const resumenMat = {};
+
+            function obtenerOCrearMaterial(nombreRaw) {
+                const key = normalizarTexto(nombreRaw);
+                if (!key) return null;
+                if (!resumenMat[key]) {
+                    resumenMat[key] = {
+                        nombreVisible: formatearNombre(nombreRaw),
+                        kilosComprados: 0,
+                        invertido: 0,
+                        kilosEnviados: 0
+                    };
+                }
+                return resumenMat[key];
+            }
+
+            let totalInversionFacturas = 0;
+
+            // 1. Procesar Compras (facturas_compras)
+            facturasList.forEach(fact => {
+                totalInversionFacturas += parseFloat(fact.total_factura || fact.total || 0);
+                const desgloses = extraerMaterialesDeFactura(fact);
+
+                desgloses.forEach(d => {
+                    const matObj = obtenerOCrearMaterial(d.material);
+                    if (matObj) {
+                        matObj.kilosComprados += d.kilos;
+                        matObj.invertido += d.monto;
+                    }
+                });
+            });
+
+            // 2. Procesar Contenedores (Ventas)
+            let totalVentasContenedores = 0;
+            const tbodyCont = document.getElementById('bodyContenedores');
+            tbodyCont.innerHTML = "";
+
+            contenedoresList.forEach(c => {
+                totalVentasContenedores += parseFloat(c.total || 0);
+
+                const matObj = obtenerOCrearMaterial(c.material);
+                if (matObj) {
+                    matObj.kilosEnviados += parseFloat(c.kilos || 0);
+                }
+
+                tbodyCont.innerHTML += `
+                    <tr>
+                        <td><strong>${c.codigo || 'S/C'}</strong></td>
+                        <td>${c.fecha || ''}</td>
+                        <td>${formatearNombre(c.material)}</td>
+                        <td>${(c.kilos || 0).toLocaleString()} kg</td>
+                        <td>₡${(c.precioKg || 0).toLocaleString()}</td>
+                        <td style="color:var(--primary); font-weight:700;">₡${(c.total || 0).toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+
+            if (contenedoresList.length === 0) {
+                tbodyCont.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8; padding: 15px;">No hay contenedores registrados.</td></tr>`;
+            }
+
+            // 3. Procesar Gastos desde 'gastos_facturas' en revisiones_faltantes
+            let totalGastosFaltantes = 0;
+            const tbodyGastos = document.getElementById('bodyGastos');
+            tbodyGastos.innerHTML = "";
+            let hayGastos = false;
+
+            faltantesList.forEach(item => {
+                const fecha = item.fecha || "";
+                const sucursal = item.sucursal || "General";
+                const montoGasto = parseFloat(item.gastos_facturas || item.gastos || 0);
+
+                if (montoGasto > 0) {
+                    hayGastos = true;
+                    totalGastosFaltantes += montoGasto;
+                    tbodyGastos.innerHTML += `
+                        <tr>
+                            <td>${fecha}</td>
+                            <td>${formatearNombre(sucursal)}</td>
+                            <td>Gastos y Servicios Operativos</td>
+                            <td style="color:var(--warning); font-weight:700;">₡${montoGasto.toLocaleString()}</td>
+                        </tr>
+                    `;
+                }
+            });
+
+            if (!hayGastos) {
+                tbodyGastos.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding: 15px;">No se encontraron gastos de facturas registrados.</td></tr>`;
+            }
+
+            // 4. Renderizar Inventario Dinámico (Todos los materiales)
+            const tbodyInv = document.getElementById('bodyInventario');
+            tbodyInv.innerHTML = "";
+            const clavesMateriales = Object.keys(resumenMat);
+
+            if (clavesMateriales.length === 0) {
+                tbodyInv.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding: 15px;">No hay materiales registrados.</td></tr>`;
+            } else {
+                clavesMateriales.forEach(key => {
+                    const item = resumenMat[key];
+                    const kilosPatio = item.kilosComprados - item.kilosEnviados;
+                    const costoPromedioKg = item.kilosComprados > 0 ? (item.invertido / item.kilosComprados) : 0;
+                    const capitalPatio = kilosPatio * costoPromedioKg;
+
+                    tbodyInv.innerHTML += `
+                        <tr>
+                            <td><strong>${item.nombreVisible}</strong></td>
+                            <td>${item.kilosComprados.toLocaleString()} kg</td>
+                            <td style="color:var(--primary); font-weight:600;">${item.kilosEnviados.toLocaleString()} kg</td>
+                            <td style="color:var(--warning); font-weight:700;">${kilosPatio.toLocaleString()} kg</td>
+                            <td style="font-weight:700;">₡${capitalPatio.toLocaleString('es-CR', { maximumFractionDigits: 2 })}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            // 5. Cálculos de KPIs Finales
+            const flujoNeto = totalVentasContenedores - (totalInversionFacturas + totalGastosFaltantes);
+            document.getElementById('kpiSalidaCompras').innerText = `- ₡${totalInversionFacturas.toLocaleString()}`;
+            document.getElementById('kpiGastosCierre').innerText = `- ₡${totalGastosFaltantes.toLocaleString()}`;
+            document.getElementById('kpiEntradaVentas').innerText = `+ ₡${totalVentasContenedores.toLocaleString()}`;
+            
+            const elFlujo = document.getElementById('kpiFlujoNeto');
+            elFlujo.innerText = `${flujoNeto >= 0 ? '+' : ''} ₡${flujoNeto.toLocaleString()}`;
+            elFlujo.style.color = flujoNeto >= 0 ? 'var(--success)' : 'var(--danger)';
+        }
+
+        async function registrarContenedorBD() {
+            const codigo = document.getElementById('numContenedor').value;
+            const fecha = document.getElementById('fechaContenedor').value;
+            const material = document.getElementById('matContenedor').value;
+            const kilos = parseFloat(document.getElementById('kilosContenedor').value);
+            const precioKg = parseFloat(document.getElementById('precioKgContenedor').value);
+
+            if (!codigo || !fecha || !material || isNaN(kilos) || isNaN(precioKg)) {
+                alert("Por favor complete todos los campos del contenedor.");
+                return;
+            }
+
+            const nuevoContenedor = {
+                codigo,
+                fecha,
+                material,
+                kilos,
+                precioKg,
+                total: kilos * precioKg,
+                creadoEn: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            try {
+                mostrarEstado("⏳ Guardando nuevo contenedor...");
+                await db.collection("contenedores").add(nuevoContenedor);
+                
+                document.getElementById('numContenedor').value = '';
+                document.getElementById('matContenedor').value = '';
+                document.getElementById('kilosContenedor').value = '';
+                document.getElementById('precioKgContenedor').value = '';
+
+                cargarDatosBD();
+            } catch (error) {
+                alert("Error al guardar contenedor en BD: " + error.message);
+                mostrarEstado(`❌ Error al guardar: ${error.message}`, true);
+            }
+        }
+
+        window.onload = function() {
+            cargarDatosBD();
+        };
+    </script>
+</body>
+</html>

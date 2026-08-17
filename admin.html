@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Control de Inventario y Cajas</title>
+    
+    <!-- Google Fonts para tipografía moderna -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, query, getDocs, doc, updateDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // Configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyCi409CkmXBbun7-POejbVaIiThK2nZ1JY",
+            authDomain: "prestamos-18dd8.firebaseapp.com",
+            projectId: "prestamos-18dd8",
+            storageBucket: "prestamos-18dd8.firebasestorage.app",
+            messagingSenderId: "921713515466",
+            appId: "1:921713515466:web:0e2bcb5d67067068570d33"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let todasLasFacturas = [];
+        let todosLosCierres = [];
+        let inventarioMateriales = {};
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                document.getElementById('modulo-admin').style.display = 'block';
+                await cargarDatosGlobales();
+            } else {
+                alert("Por favor inicia sesión primero en el sistema.");
+                window.location.href = "index.html"; 
+            }
+        });
+        
+
+        window.logoutAdmin = () => signOut(auth).then(() => window.location.reload());
+
+        // Carga masiva inicial de datos desde Firebase
+        async function cargarDatosGlobales() {
+            try {
+                // 1. Cargar Cierres de Caja
+                const qCierres = query(collection(db, "revisiones_faltantes"), orderBy("timestamp", "desc"));
+                const snapCierres = await getDocs(qCierres);
+                todosLosCierres = [];
+                snapCierres.forEach(doc => {
+                    todosLosCierres.push({ id: doc.id, ...doc.data() });
+                });
+
+                // 2. Cargar Facturas
+                const qFacturas = query(collection(db, "facturas_compras"), orderBy("timestamp", "desc"));
+                const snapFacturas = await getDocs(qFacturas);
+                todasLasFacturas = [];
+                
+                snapFacturas.forEach(doc => {
+                    todasLasFacturas.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Renderizar módulos
+                renderizarUltimosCierresPorSucursal();
+                aplicarFiltrosYRenderizar();
+                renderizarCierres();
+
+            } catch (error) {
+                console.error("Error cargando datos en Admin: ", error);
+            }
+        }
+        
+
+        // Procesa y renderiza el último cierre recibido de cada sucursal
+        function renderizarUltimosCierresPorSucursal() {
+            const container = document.getElementById('grid-ultimos-cierres');
+            container.innerHTML = "";
+
+            if (todosLosCierres.length === 0) {
+                container.innerHTML = `<div style="color:#94a3b8; font-size:13px;">No hay datos de cierres disponibles.</div>`;
+                return;
+            }
+
+            // Agrupar el cierre más reciente por cada sucursal
+            const ultimosPorSucursal = {};
+
+            todosLosCierres.forEach(cierre => {
+                const nombreSucursal = (cierre.sucursal || "General").trim();
+                const key = nombreSucursal.toLowerCase();
+
+                if (!ultimosPorSucursal[key]) {
+                    ultimosPorSucursal[key] = cierre;
+                }
+            });
+
+            // Generar tarjetas para cada sucursal encontrada
+            for (const key in ultimosPorSucursal) {
+                const c = ultimosPorSucursal[key];
+                const nombreSucursal = c.sucursal || "Sucursal";
+                const fecha = c.fecha || "Sin Fecha";
+                const inicio = parseFloat(c.caja_inicio) || 0;
+                
+                let cierreMano = 0;
+                if (typeof c.cierre_mano === 'number') cierreMano = c.cierre_mano;
+                else if (typeof c.cierre_mano === 'string') cierreMano = parseFloat(c.cierre_mano.replace(/[^0-9.-]+/g,"")) || 0;
+
+                container.innerHTML += `
+                    <div class="cierre-card">
+                        <div class="cierre-card-header">
+                            <span class="cierre-card-title">Último Cierre: <b>${nombreSucursal}</b></span>
+                            <span class="cierre-card-date">📅 ${fecha}</span>
+                        </div>
+                        <div class="cierre-card-body">
+                            <div class="cierre-stat-box">
+                                <span class="lbl">Inició con:</span>
+                                <span class="val-inicio">₡${inicio.toLocaleString('es-CR')}</span>
+                            </div>
+                            <div class="cierre-stat-box">
+                                <span class="lbl">Cerró con:</span>
+                                <span class="val-cierre">₡${cierreMano.toLocaleString('es-CR')}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Calcula cuánto material hay basándose ÚNICAMENTE en las facturas filtradas
+        function calcularInventarioTeorico(facturasParaCalcular) {
+            inventarioMateriales = {};
+            let globalKilos = 0;
+            let globalInversion = 0;
+
+            facturasParaCalcular.forEach(factura => {
+                if (factura.detalles_materiales && Array.isArray(factura.detalles_materiales)) {
+                    factura.detalles_materiales.forEach(m => {
+                        const nombreMat = m.material;
+                        const kilos = parseFloat(m.kilos) || 0;
+                        const costo = parseFloat(m.total_pago) || 0;
+
+                        globalKilos += kilos;
+                        globalInversion += costo;
+
+                        if (!inventarioMateriales[nombreMat]) {
+                            inventarioMateriales[nombreMat] = { kilosTotales: 0, inversionTotal: 0 };
+                        }
+                        inventarioMateriales[nombreMat].kilosTotales += kilos;
+                        inventarioMateriales[nombreMat].inversionTotal += costo;
+                    });
+                }
+            });
+
+            document.getElementById('kpi-facturas-count').innerText = facturasParaCalcular.length;
+            document.getElementById('kpi-kilos-total').innerText = globalKilos.toLocaleString('es-CR', { maximumFractionDigits: 1 }) + " kg";
+            document.getElementById('kpi-inversion-total').innerText = "₡" + globalInversion.toLocaleString('es-CR');
+
+            renderizarInventario();
+        }
+
+        function renderizarInventario() {
+            const tbody = document.getElementById('body-inventario-admin');
+            tbody.innerHTML = "";
+
+            if (Object.keys(inventarioMateriales).length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding: 20px;">No hay materiales acumulados para este filtro.</td></tr>`;
+                return;
+            }
+
+            for (const [material, datos] of Object.entries(inventarioMateriales)) {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>
+                            <div class="material-tag">
+                                📦 <span>${material}</span>
+                            </div>
+                        </td>
+                        <td style="color:#059669; font-weight:700; font-size:14px;">
+                            ${datos.kilosTotales.toLocaleString('es-CR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} kg
+                        </td>
+                        <td style="font-weight:600; color:#1e293b;">₡${datos.inversionTotal.toLocaleString('es-CR')}</td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Actualiza el banner destacado con el resumen del día/sucursal
+        function actualizarBannerDestacado(sucursal, fecha) {
+            const banner = document.getElementById('banner-destacado');
+            if (!sucursal && !fecha) {
+                banner.style.display = 'none';
+                return;
+            }
+
+            banner.style.display = 'block';
+            document.getElementById('banner-sucursal-nombre').innerText = sucursal ? `SUCURSAL: ${sucursal.toUpperCase()}` : 'TODAS LAS SUCURSALES';
+            document.getElementById('banner-fecha-texto').innerText = fecha ? `📅 Día: ${fecha}` : '📅 Todas las Fechas';
+
+            let cierresCoincidentes = todosLosCierres.filter(c => {
+                const coincideSuc = sucursal ? (c.sucursal && c.sucursal.toLowerCase() === sucursal.toLowerCase()) : true;
+                const coincideFec = fecha ? (c.fecha === fecha) : true;
+                return coincideSuc && coincideFec;
+            });
+
+            let cajaInicio = 0;
+            let ventas = 0;
+            let pagoMateriales = 0;
+            let otrosGastos = 0;
+            let efectivoMano = 0;
+
+            cierresCoincidentes.forEach(c => {
+                cajaInicio += parseFloat(c.caja_inicio) || 0;
+                ventas += parseFloat(c.total_ventas) || 0;
+                pagoMateriales += parseFloat(c.pago_materiales || c.pago_materials) || 0;
+                otrosGastos += parseFloat(c.gastos_facturas || c.otros_gastos || c.gastos_varios) || 0;
+                
+                let valMano = 0;
+                if (typeof c.cierre_mano === 'number') valMano = c.cierre_mano;
+                else if (typeof c.cierre_mano === 'string') valMano = parseFloat(c.cierre_mano.replace(/[^0-9.-]+/g,"")) || 0;
+                efectivoMano += valMano;
+            });
+
+            document.getElementById('banner-caja-inicio').innerText = "₡" + cajaInicio.toLocaleString('es-CR');
+            document.getElementById('banner-ventas').innerText = "₡" + ventas.toLocaleString('es-CR');
+            document.getElementById('banner-gastos-mat').innerText = "₡" + pagoMateriales.toLocaleString('es-CR');
+            document.getElementById('banner-gastos-otros').innerText = "₡" + otrosGastos.toLocaleString('es-CR');
+            document.getElementById('banner-efectivo-mano').innerText = "₡" + efectivoMano.toLocaleString('es-CR');
+        }
+
+        // Filtra dinámicamente las facturas y recalcula inventarios y métricas
+        window.aplicarFiltrosYRenderizar = () => {
+            const busquedaNum = document.getElementById('buscarNumFactura').value.trim().toLowerCase();
+            const filtroSucursal = document.getElementById('filtroSucursalFact').value;
+            const filtroFecha = document.getElementById('filtroFechaFact').value;
+            const filtroEstado = document.getElementById('filtroEstadoFact').value;
+
+            actualizarBannerDestacado(filtroSucursal, filtroFecha);
+
+            const tbody = document.getElementById('body-facturas-admin');
+            tbody.innerHTML = "";
+
+            const facturasFiltradas = todasLasFacturas.filter(factura => {
+                const coincideNum = factura.num_factura ? factura.num_factura.toLowerCase().includes(busquedaNum) : true;
+                const coincideSucursal = filtroSucursal ? (factura.sucursal && factura.sucursal.toLowerCase() === filtroSucursal.toLowerCase()) : true;
+                const coincideFecha = filtroFecha ? factura.fecha === filtroFecha : true;
+                
+                let coincideEstado = true;
+                if (filtroEstado) {
+                    const cierreAsociado = todosLosCierres.find(c => c.id === factura.cierre_id);
+                    const estadoCierre = cierreAsociado ? cierreAsociado.estado : "Pendiente";
+                    coincideEstado = (estadoCierre === filtroEstado);
+                }
+
+                return coincideNum && coincideSucursal && coincideFecha && coincideEstado;
+            });
+
+            calcularInventarioTeorico(facturasFiltradas);
+
+            if (facturasFiltradas.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8; padding: 25px;">No se encontraron facturas coincidentes con los criterios de búsqueda.</td></tr>`;
+                return;
+            }
+
+            facturasFiltradas.forEach(fact => {
+                let resumenMats = fact.detalles_materiales ? fact.detalles_materiales.map(m => `${m.material} (${m.kilos.toLocaleString('es-CR')}kg)`).join(', ') : "Sin detalle";
+                const monto = parseFloat(fact.total_factura) || 0;
+
+                const cierreAsociado = todosLosCierres.find(c => c.id === fact.cierre_id);
+                const estadoFact = cierreAsociado ? cierreAsociado.estado : "Pendiente";
+                const badgeEstadoClass = estadoFact === 'Pendiente' ? 'status-pendiente' : 'status-aprobado';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><span class="badge-sucursal">${fact.sucursal || 'General'}</span></td>
+                        <td><b style="color:#0f172a;"># ${fact.num_factura || 'N/A'}</b></td>
+                        <td>
+                            <div style="font-weight:600; color:#1e293b;">${fact.nombre || 'Anónimo'}</div>
+                            <small style="color:#64748b;">${fact.cedula || 'Sin Identificación'}</small>
+                        </td>
+                        <td><div class="material-detail-text">${resumenMats}</div></td>
+                        <td style="font-weight:700; color:#2563eb; font-size:14px;">₡${monto.toLocaleString('es-CR')}</td>
+                        <td>
+                            <div style="font-size:12px; color:#475569; font-weight:500;">${fact.fecha || 'Sin Fecha'}</div>
+                            <span class="status-badge ${badgeEstadoClass}">${estadoFact}</span>
+                        </td>
+                    </tr>
+                `;
+            });
+        };
+
+        // Renderiza los cierres financieros de caja en la tabla
+        function renderizarCierres() {
+            const tbody = document.getElementById('body-cierres-admin');
+            tbody.innerHTML = "";
+
+            if (todosLosCierres.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 25px;">No se han recibido reportes de cierres de caja.</td></tr>`;
+                return;
+            }
+
+            todosLosCierres.forEach(cierre => {
+                const estadoClass = cierre.estado === 'Pendiente' ? 'status-pendiente' : 'status-aprobado';
+                tbody.innerHTML += `
+                    <tr>
+                        <td><b>${cierre.sucursal}</b></td>
+                        <td><span style="color:#475569; font-weight:500;">${cierre.fecha}</span></td>
+                        <td style="color:#334155;">₡${(cierre.caja_inicio || 0).toLocaleString('es-CR')}</td>
+                        <td style="color:#334155;">₡${(cierre.total_ventas || 0).toLocaleString('es-CR')}</td>
+                        <td style="color:#dc2626; font-weight:600;">₡${(cierre.pago_materiales || cierre.pago_materials || 0).toLocaleString('es-CR')}</td>
+                        <td style="color:#059669; font-weight:700; font-size:14px;">₡${(parseFloat(cierre.cierre_mano) || 0).toLocaleString('es-CR')}</td>
+                        <td>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span class="status-badge ${estadoClass}">${cierre.estado || 'Pendiente'}</span>
+                                ${cierre.estado === 'Pendiente' ? `<button class="btn-approve" onclick="aprobarCierreCaja('${cierre.id}')">Aprobar</button>` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        window.aprobarCierreCaja = async (idCierre) => {
+            if (!confirm("¿Desea marcar este cierre de caja como aprobado y revisado?")) return;
+            try {
+                const docRef = doc(db, "revisiones_faltantes", idCierre);
+                await updateDoc(docRef, { estado: "Aprobado" });
+                alert("✅ Cierre aprobado correctamente.");
+                await cargarDatosGlobales();
+            } catch (error) {
+                alert("Error al aprobar: " + error.message);
+            }
+        };
+
+        window.refrescarPanelAdmin = () => cargarDatosGlobales();
+    </script>
+
+    <style>
+        :root {
+            --bg-main: #f8fafc;
+            --surface: #ffffff;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --radius-lg: 12px;
+            --radius-md: 8px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+            background: var(--bg-main); 
+            margin: 0; 
+            padding: 24px; 
+            color: var(--text-dark); 
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .header-admin { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            background: var(--surface); 
+            padding: 18px 24px; 
+            border-radius: var(--radius-lg); 
+            margin-bottom: 20px; 
+            box-shadow: var(--shadow-sm); 
+            border: 1px solid var(--border-color);
+        }
+
+        .header-admin h2 { 
+            margin: 0; 
+            font-size: 20px; 
+            font-weight: 700;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* BANNER DE ÚLTIMOS CIERRES ARRIBA */
+        .section-ultimos-cierres {
+            margin-bottom: 20px;
+        }
+
+        .section-ultimos-cierres h3 {
+            margin: 0 0 12px 0;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .grid-ultimos-cierres {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 14px;
+        }
+
+        .cierre-card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-top: 4px solid var(--primary);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .cierre-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .cierre-card-title {
+            font-size: 13px;
+            color: var(--text-dark);
+        }
+
+        .cierre-card-date {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: #f1f5f9;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .cierre-card-body {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .cierre-stat-box {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cierre-stat-box .lbl {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .cierre-stat-box .val-inicio {
+            font-size: 15px;
+            font-weight: 700;
+            color: #475569;
+        }
+
+        .cierre-stat-box .val-cierre {
+            font-size: 15px;
+            font-weight: 800;
+            color: #059669;
+        }
+
+        /* KPIs */
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            padding: 16px 20px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .kpi-card .label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .kpi-card .value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        /* Banner Destacado */
+        .hero-banner {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: white;
+            border-radius: var(--radius-lg);
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.25);
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hero-banner-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        .hero-banner-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: #38bdf8;
+            letter-spacing: -0.5px;
+            margin: 0;
+        }
+
+        .hero-banner-date {
+            font-size: 14px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 6px 14px;
+            border-radius: 20px;
+            color: #e2e8f0;
+        }
+
+        .hero-banner-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+        }
+
+        .hero-stat {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .hero-stat .hero-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #94a3b8;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .hero-stat .hero-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .grid-main { 
+            display: grid; 
+            grid-template-columns: 1fr 360px; 
+            gap: 20px; 
+        }
+
+        @media (max-width: 1024px) {
+            .grid-main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card { 
+            background: var(--surface); 
+            padding: 20px; 
+            border-radius: var(--radius-lg); 
+            box-shadow: var(--shadow-sm); 
+            margin-bottom: 20px; 
+            border: 1px solid var(--border-color);
+        }
+
+        .card-header {
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-header h3 { 
+            margin: 0; 
+            color: var(--text-dark); 
+            font-size: 16px; 
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-subtitle {
+            font-size: 12px; 
+            color: var(--text-muted); 
+            margin-top: 4px;
+            margin-bottom: 0;
+        }
+
+        .filter-row { 
+            display: grid; 
+            grid-template-columns: 2fr 1fr 1fr 1fr; 
+            gap: 10px; 
+            margin-bottom: 16px; 
+            background: #f1f5f9; 
+            padding: 10px; 
+            border-radius: var(--radius-md); 
+        }
+
+        @media (max-width: 640px) {
+            .filter-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        input, select { 
+            width: 100%; 
+            padding: 8px 12px; 
+            border: 1px solid var(--border-color); 
+            border-radius: var(--radius-md); 
+            box-sizing: border-box; 
+            font-size: 13px; 
+            height: 38px; 
+            background: var(--surface);
+            color: var(--text-dark);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--primary);
+        }
+
+        .table-responsive { 
+            width: 100%; 
+            overflow-x: auto; 
+            border: 1px solid var(--border-color); 
+            border-radius: var(--radius-md); 
+            background: var(--surface); 
+        }
+
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            font-size: 13px; 
+            text-align: left; 
+        }
+
+        th { 
+            background: #f8fafc; 
+            padding: 10px 14px; 
+            font-weight: 600; 
+            color: var(--text-muted); 
+            border-bottom: 1px solid var(--border-color); 
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }
+
+        td { 
+            padding: 12px 14px; 
+            border-bottom: 1px solid var(--border-color); 
+            vertical-align: middle; 
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover { 
+            background: #f8fafc; 
+        }
+
+        .material-detail-text {
+            font-size: 12px; 
+            max-width: 230px; 
+            color: #475569;
+            line-height: 1.4;
+        }
+
+        .material-tag {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .badge-sucursal { 
+            background: #e0f2fe; 
+            color: #0369a1; 
+            padding: 3px 8px; 
+            border-radius: 4px; 
+            font-weight: 600; 
+            font-size: 11px; 
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .status-badge { 
+            padding: 3px 8px; 
+            border-radius: 12px; 
+            font-size: 11px; 
+            font-weight: 600; 
+            display: inline-block; 
+            margin-top: 2px;
+        }
+
+        .status-pendiente { 
+            background: #fef3c7; 
+            color: #b45309; 
+        }
+
+        .status-aprobado { 
+            background: #dcfce7; 
+            color: #15803d; 
+        }
+
+        .btn-logout { 
+            background: #ef4444; 
+            color: white; 
+            border: none; 
+            padding: 8px 14px; 
+            border-radius: var(--radius-md); 
+            font-weight: 600; 
+            font-size: 13px;
+            cursor: pointer; 
+            transition: background 0.2s;
+        }
+
+        .btn-logout:hover {
+            background: #dc2626;
+        }
+
+        .btn-refresh { 
+            background: #0d9488; 
+            color: white; 
+            border: none; 
+            padding: 8px 14px; 
+            border-radius: var(--radius-md); 
+            font-weight: 600; 
+            font-size: 13px;
+            cursor: pointer; 
+            transition: background 0.2s;
+        }
+         /* Header Principal */
+        .header-admin {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background: var(--surface);
+            padding: 16px 20px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Botón Caja Administrador Mejorado */
+        .btn-nav-admin {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 9px 18px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffffff;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            border: none;
+            border-radius: var(--radius-md);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .btn-refresh:hover {
+            background: #0f766e;
+        }
+
+        .btn-approve { 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            padding: 4px 10px; 
+            border-radius: 4px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            font-size: 11px; 
+            transition: background 0.2s;
+        }
+
+        .btn-approve:hover {
+            background: var(--primary-hover);
+        }
+
+        .scroll-panel { 
+            max-height: 420px; 
+            overflow-y: auto; 
+        }
+
+        .sticky-card {
+            position: sticky; 
+            top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="modulo-admin" style="display:none;">
+        
+        <!-- Header Principal -->
+        <div class="header-admin">
+            <h2>📈 Panel Central de Administración</h2>
+            <div class="header-actions">
+                <button class="btn-refresh" onclick="refrescarPanelAdmin()">🔄 Sincronizar BD</button>
+                <a href="administrador.html" class="btn-nav-admin">⚙️ Ir a Administrador</a>
+                <button class="btn-logout" onclick="logoutAdmin()">Cerrar Sesión</button>
+            </div>
+        </div>
+
+        <!-- ÚLTIMOS CIERRES POR SUCURSAL -->
+        <div class="section-ultimos-cierres">
+            <h3>📌 Últimos Cierres Registrados por Sucursal</h3>
+            <div class="grid-ultimos-cierres" id="grid-ultimos-cierres">
+                <!-- Se llena dinámicamente con JS -->
+            </div>
+        </div>
+
+        <!-- Métricas Dinámicas (KPIs) -->
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <div class="label">Total Facturas Filtradas</div>
+                <div class="value" id="kpi-facturas-count">0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Inversión Total Filtrada</div>
+                <div class="value" id="kpi-inversion-total" style="color: var(--primary);">₡0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Materia Prima Registrada</div>
+                <div class="value" id="kpi-kilos-total" style="color: #059669;">0 kg</div>
+            </div>
+        </div>
+
+        <div class="grid-main">
+            
+            <!-- Columna Izquierda: Facturas y Cierres -->
+            <div>
+                <!-- Módulo Facturas -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>🔍 Filtro y Búsqueda Avanzada de Facturas</h3>
+                    </div>
+                    
+                    <div class="filter-row">
+                        <div>
+                            <input type="text" id="buscarNumFactura" placeholder="🔎 Buscar por número de factura..." oninput="aplicarFiltrosYRenderizar()">
+                        </div>
+                        <div>
+                            <select id="filtroEstadoFact" onchange="aplicarFiltrosYRenderizar()">
+                                <option value="">✅ Todos los Estados</option>
+                                <option value="Aprobado">Aprobados</option>
+                                <option value="Pendiente">Pendientes</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="filtroSucursalFact" onchange="aplicarFiltrosYRenderizar()">
+                                <option value="">🏢 Todas las Sucursales</option>
+                                <option value="Perez">Pérez</option>
+                                <option value="Paraiso">Paraíso</option>
+                                <option value="Cartago">Cartago</option>
+                            </select>
+                        </div>
+                        <div>
+                            <input type="date" id="filtroFechaFact" onchange="aplicarFiltrosYRenderizar()">
+                        </div>
+                    </div>
+
+                    <!-- BANNER DESTACADO DE RESUMEN -->
+                    <div id="banner-destacado" class="hero-banner">
+                        <div class="hero-banner-header">
+                            <h2 class="hero-banner-title" id="banner-sucursal-nombre">SUCURSAL: PÉREZ</h2>
+                            <span class="hero-banner-date" id="banner-fecha-texto">📅 Día: 2026-08-09</span>
+                        </div>
+                        <div class="hero-banner-grid">
+                            <div class="hero-stat">
+                                <div class="hero-label">💵 Caja Inicial</div>
+                                <div class="hero-value" id="banner-caja-inicio">₡0</div>
+                            </div>
+                            <div class="hero-stat">
+                                <div class="hero-label">📈 Ventas</div>
+                                <div class="hero-value" id="banner-ventas" style="color:#4ade80;">₡0</div>
+                            </div>
+                            <div class="hero-stat">
+                                <div class="hero-label">📦 Gastos Materiales</div>
+                                <div class="hero-value" id="banner-gastos-mat" style="color:#f87171;">₡0</div>
+                            </div>
+                            <div class="hero-stat">
+                                <div class="hero-label">💸 Otros Gastos</div>
+                                <div class="hero-value" id="banner-gastos-otros" style="color:#fbbf24;">₡0</div>
+                            </div>
+                            <div class="hero-stat">
+                                <div class="hero-label">💰 Efectivo en Mano</div>
+                                <div class="hero-value" id="banner-efectivo-mano" style="color:#38bdf8;">₡0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="scroll-panel">
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Sucursal</th>
+                                        <th>Factura</th>
+                                        <th>Cliente / Cédula</th>
+                                        <th>Detalle Materiales</th>
+                                        <th>Invertido</th>
+                                        <th>Fecha / Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="body-facturas-admin">
+                                    <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding: 20px;">Cargando historial de facturas...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Módulo Cierres de Caja -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>💰 Control y Aprobación de Cierres de Caja</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Sucursal</th>
+                                    <th>Fecha</th>
+                                    <th>Caja Inicio</th>
+                                    <th>Ventas</th>
+                                    <th>Compras Material</th>
+                                    <th>Efectivo Mano</th>
+                                    <th>Estado / Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="body-cierres-admin">
+                                <tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 20px;">Cargando cierres de sucursales...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Inventario Teórico Lateral -->
+            <div>
+                <div class="card sticky-card">
+                    <div class="card-header">
+                        <h3>📦 Inventario Teórico en Bodega</h3>
+                        <p class="card-subtitle">
+                            Muestra el pesaje total acumulado según los filtros aplicados en el panel principal.
+                        </p>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Material</th>
+                                    <th>Stock</th>
+                                    <th>Invertido</th>
+                                </tr>
+                            </thead>
+                            <tbody id="body-inventario-admin">
+                                <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding: 20px;">Calculando stock disponible...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</body>
+</html>
