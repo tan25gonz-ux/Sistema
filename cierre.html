@@ -76,6 +76,9 @@
                 actualizarTablaGeneralDia(); 
                 actualizarTablaGastos();
                 actualizarTablaDepositos();
+
+                // Actualizar el estado visual de la serie al cargar
+                actualizarEstadoSerie();
             } else {
                 document.getElementById('login-section').style.display = 'block';
                 document.getElementById('modulo-principal').style.display = 'none';
@@ -86,10 +89,29 @@
             await obtenerSiguienteNumeroFactura();
         }
 
+        // ✅ NUEVA FUNCIÓN: Indicador visual de serie activa/desactiva
+        window.actualizarEstadoSerie = function() {
+            const serie = document.getElementById('serieFactura').value.trim();
+            const statusEl = document.getElementById('statusSerie');
+            const inputSerie = document.getElementById('serieFactura');
+
+            if (serie) {
+                statusEl.innerHTML = `🔵 Secuencia Activa: ${serie}`;
+                statusEl.style.color = '#2563eb';
+                statusEl.style.fontWeight = 'bold';
+                inputSerie.style.borderColor = '#2563eb';
+            } else {
+                statusEl.innerHTML = '⚪ Secuencia Por Defecto';
+                statusEl.style.color = '#64748b';
+                statusEl.style.fontWeight = 'normal';
+                inputSerie.style.borderColor = '#cbd5e1';
+            }
+        }
+
         async function obtenerSiguienteNumeroFactura() {
             try {
                 const serieIngresada = document.getElementById('serieFactura').value.trim();
-                // Si el usuario pone una serie, el contador se guarda por separado para esa serie
+                // Si el usuario pone un número (o texto), el contador se guarda por separado para esa serie
                 const idContador = serieIngresada ? `${sucursalActual}_${serieIngresada}` : sucursalActual;
 
                 const docRef = doc(db, "contadores_facturas", idContador);
@@ -669,7 +691,7 @@
                     detalles_depositos: listaDepositosDia,
                     pago_materiales: totalAcumuladoComprasDia,
                     gastos_facturas: obtenerTotalGastos(),
-                    detalles_gastos: listaGastosDia, // ✅ AHORA GUARDA LA DESCRIPCIÓN DE LOS GASTOS
+                    detalles_gastos: listaGastosDia, // GUARDA LA DESCRIPCIÓN DE LOS GASTOS
                     cierre_mano: obtenerNumeroLimpio('cierreMano'),
                     estado: "Pendiente", timestamp: serverTimestamp()
                 });
@@ -840,8 +862,12 @@
                         <input type="text" id="numFacturaCliente" placeholder="Automático" style="border: 1px solid #2b6cb0; font-weight: bold; background: #fff;">
                     </div>
                     <div>
-                        <label>Serie / Tipo Factura</label>
-                        <input type="text" id="serieFactura" placeholder="Ej: A, Principal" onchange="cambiarSerieFactura()">
+                        <label>Secuencia / Tipo Factura</label>
+                        <!-- ✅ CAMBIO VISUAL: Indicador de estado "Activo / Desactivo" -->
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="text" id="serieFactura" placeholder="Ej: 1144" onchange="cambiarSerieFactura()" oninput="actualizarEstadoSerie()">
+                            <span id="statusSerie" style="font-size: 13px; white-space: nowrap; font-weight: 600;"></span>
+                        </div>
                     </div>
                 </div>
 
@@ -872,7 +898,7 @@
                     <table>
                         <thead>
                             <tr>
-                                <th># Factura / Serie</th>
+                                <th># Factura / Secuencia</th>
                                 <th>Cliente</th>
                                 <th>Detalle</th>
                                 <th>Monto</th>
