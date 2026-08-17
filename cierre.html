@@ -38,6 +38,10 @@
         let totalAcumuladoComprasDia = 0;
         let sucursalActual = "Desconocida";
 
+        // ✅ NUEVAS VARIABLES PARA LAS SECUENCIAS
+        let secuenciaActiva = ''; // '' significa la secuencia base, '1144' la secundaria
+        const ID_SECUNDARIA = '1144'; // Cambia este número si quieres usar otra serie secundaria
+
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 uidTrabajador = user.uid;
@@ -72,48 +76,67 @@
                 await cargarPreciosDesdeFirebase();
                 await calcularDeudaTotal();
                 await cargarUltimoCierre();
-                await obtenerSiguienteNumeroFactura();
+                
+                // Cargar los números de ambas secuencias al iniciar
+                await cargarNumerosSecuencias();
+                // Activar por defecto la secuencia base
+                await cambiarSecuencia('default');
+
                 actualizarTablaGeneralDia(); 
                 actualizarTablaGastos();
                 actualizarTablaDepositos();
-
-                // Actualizar el estado visual de la serie al cargar
-                actualizarEstadoSerie();
             } else {
                 document.getElementById('login-section').style.display = 'block';
                 document.getElementById('modulo-principal').style.display = 'none';
             }
         });
 
-        window.cambiarSerieFactura = async function() {
-            await obtenerSiguienteNumeroFactura();
-        }
+        // ✅ NUEVA FUNCIÓN: Carga los números actuales de AMBAS secuencias para mostrarlos en los botones
+        async function cargarNumerosSecuencias() {
+            try {
+                // Cargar la secuencia base
+                const refBase = doc(db, "contadores_facturas", sucursalActual);
+                const snapBase = await getDoc(refBase);
+                const numBase = snapBase.exists() ? (snapBase.data().ultimo_numero || 0) + 1 : 1;
+                document.getElementById('num-default').innerText = numBase;
 
-        // ✅ NUEVA FUNCIÓN: Indicador visual de serie activa/desactiva
-        window.actualizarEstadoSerie = function() {
-            const serie = document.getElementById('serieFactura').value.trim();
-            const statusEl = document.getElementById('statusSerie');
-            const inputSerie = document.getElementById('serieFactura');
+                // Cargar la secuencia secundaria (1144)
+                const refSec = doc(db, "contadores_facturas", `${sucursalActual}_${ID_SECUNDARIA}`);
+                const snapSec = await getDoc(refSec);
+                const numSec = snapSec.exists() ? (snapSec.data().ultimo_numero || 0) + 1 : 1;
+                document.getElementById('num-secundaria').innerText = numSec;
 
-            if (serie) {
-                statusEl.innerHTML = `🔵 Secuencia Activa: ${serie}`;
-                statusEl.style.color = '#2563eb';
-                statusEl.style.fontWeight = 'bold';
-                inputSerie.style.borderColor = '#2563eb';
-            } else {
-                statusEl.innerHTML = '⚪ Secuencia Por Defecto';
-                statusEl.style.color = '#64748b';
-                statusEl.style.fontWeight = 'normal';
-                inputSerie.style.borderColor = '#cbd5e1';
+            } catch (error) {
+                console.error("Error al cargar los números de secuencia:", error);
             }
         }
 
-        async function obtenerSiguienteNumeroFactura() {
-            try {
-                const serieIngresada = document.getElementById('serieFactura').value.trim();
-                // Si el usuario pone un número (o texto), el contador se guarda por separado para esa serie
-                const idContador = serieIngresada ? `${sucursalActual}_${serieIngresada}` : sucursalActual;
+        // ✅ NUEVA FUNCIÓN: Cambia la secuencia activa y actualiza los estilos visuales
+        window.cambiarSecuencia = async function(tipo) {
+            secuenciaActiva = (tipo === 'default') ? '' : ID_SECUNDARIA;
+            
+            const boxDefault = document.getElementById('seq-default-box');
+            const boxSec = document.getElementById('seq-secundaria-box');
+            
+            if (secuenciaActiva === '') {
+                boxDefault.className = 'seq-box seq-active';
+                boxDefault.querySelector('.seq-status').innerText = '🔵 Activo';
+                boxSec.className = 'seq-box seq-inactive';
+                boxSec.querySelector('.seq-status').innerText = '⚪ Inactivo';
+            } else {
+                boxSec.className = 'seq-box seq-active';
+                boxSec.querySelector('.seq-status').innerText = '🔵 Activo';
+                boxDefault.className = 'seq-box seq-inactive';
+                boxDefault.querySelector('.seq-status').innerText = '⚪ Inactivo';
+            }
 
+            await obtenerSiguienteNumeroFacturaActual();
+        }
+
+        // ✅ NUEVA FUNCIÓN: Obtiene el siguiente número de la secuencia actualmente activa
+        async function obtenerSiguienteNumeroFacturaActual() {
+            try {
+                const idContador = secuenciaActiva ? `${sucursalActual}_${secuenciaActiva}` : sucursalActual;
                 const docRef = doc(db, "contadores_facturas", idContador);
                 const docSnap = await getDoc(docRef);
                 let siguienteNum = 1;
@@ -318,7 +341,6 @@
             const cedula = document.getElementById('cedulaCliente').value.trim();
             const nombre = document.getElementById('nombreCliente').value.trim();
             let numFactura = document.getElementById('numFacturaCliente').value.trim();
-            const serie = document.getElementById('serieFactura').value.trim();
             const cedulaLimpia = cedula.replace(/-/g, '');
 
             if (!cedulaLimpia || !nombre || !numFactura) {
@@ -360,8 +382,8 @@
                     ultima_actualizacion: serverTimestamp()
                 }, { merge: true });
 
-                // Actualizar contador de la serie específica
-                const idContador = serie ? `${sucursalActual}_${serie}` : sucursalActual;
+                // ✅ Guardar el contador de la secuencia activa
+                const idContador = secuenciaActiva ? `${sucursalActual}_${secuenciaActiva}` : sucursalActual;
                 const docRef = doc(db, "contadores_facturas", idContador);
                 const docSnap = await getDoc(docRef);
                 let ultimoNum = 0;
@@ -381,7 +403,7 @@
 
             facturasDelDia.push({
                 num_factura: numFactura,
-                serie: serie,
+                serie: secuenciaActiva, // Se guarda la secuencia activa
                 cedula: cedulaLimpia,
                 nombre,
                 detalles_materiales: materialesIngresados,
@@ -392,7 +414,8 @@
 
             actualizarTablaGeneralDia();
             limpiarFormularioFactura();
-            await obtenerSiguienteNumeroFactura();
+            await cargarNumerosSecuencias(); // Actualiza los números de los botones
+            await obtenerSiguienteNumeroFacturaActual(); // Actualiza el campo del formulario
             document.getElementById('cedulaCliente').focus();
         };
 
@@ -691,7 +714,7 @@
                     detalles_depositos: listaDepositosDia,
                     pago_materiales: totalAcumuladoComprasDia,
                     gastos_facturas: obtenerTotalGastos(),
-                    detalles_gastos: listaGastosDia, // GUARDA LA DESCRIPCIÓN DE LOS GASTOS
+                    detalles_gastos: listaGastosDia,
                     cierre_mano: obtenerNumeroLimpio('cierreMano'),
                     estado: "Pendiente", timestamp: serverTimestamp()
                 });
@@ -809,6 +832,34 @@
         .scroll-precios { max-height: 300px; overflow-y: auto; margin-bottom: 12px; border-radius: 8px; }
         .box-ultimo-cierre { background: #edf2f7; border-left: 4px solid #3182ce; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #2d3748; }
         .btn-print { background: #2b6cb0; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
+
+        /* ✅ NUEVO ESTILO PARA LOS SELECTORES DE SECUENCIA */
+        .seq-box {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 12px;
+            cursor: pointer;
+            flex: 1;
+            text-align: center;
+            transition: all 0.2s;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .seq-box:hover { background: #f1f5f9; }
+        .seq-active {
+            border-color: #2563eb;
+            background: #eff6ff;
+            box-shadow: 0 0 0 1px #2563eb;
+        }
+        .seq-inactive {
+            opacity: 0.8;
+        }
+        .seq-num { font-size: 18px; font-weight: bold; color: #0f172a; }
+        .seq-label { font-size: 11px; color: #64748b; }
+        .seq-status { font-size: 12px; font-weight: 600; }
+
         @media(max-width: 850px) {
             .grid-layout { grid-template-columns: 1fr; gap: 16px; }
             body { padding: 8px; }
@@ -845,7 +896,7 @@
             <div class="seccion-interna" style="border: 1px solid #4299e1; background: #f0f8ff;">
                 <h4 style="margin-bottom:10px; color:#2b6cb0;">🛒 1. FACTURACIÓN ACTUAL (RECIBO DE MATERIAL)</h4>
                 
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px;">
                     <div>
                         <label>Cédula del Cliente</label>
                         <div class="cedula-row">
@@ -859,19 +910,28 @@
                     </div>
                     <div>
                         <label># Número de Factura</label>
-                        <input type="text" id="numFacturaCliente" placeholder="Automático" style="border: 1px solid #2b6cb0; font-weight: bold; background: #fff;">
+                        <input type="text" id="numFacturaCliente" placeholder="Automático" style="border: 1px solid #2b6cb0; font-weight: bold; background: #fff;" readonly>
                     </div>
-                    <div>
-                        <label>Secuencia / Tipo Factura</label>
-                        <!-- ✅ CAMBIO VISUAL: Indicador de estado "Activo / Desactivo" -->
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <input type="text" id="serieFactura" placeholder="Ej: 1144" onchange="cambiarSerieFactura()" oninput="actualizarEstadoSerie()">
-                            <span id="statusSerie" style="font-size: 13px; white-space: nowrap; font-weight: 600;"></span>
+                </div>
+
+                <!-- ✅ NUEVO SELECTOR DE SECUENCIA VISUAL -->
+                <div style="grid-column: 1 / -1; margin-top: 10px;">
+                    <label>Seleccionar Secuencia de Facturación Activa:</label>
+                    <div style="display: flex; gap: 12px; margin-top: 5px;">
+                        <div id="seq-default-box" class="seq-box seq-active" onclick="cambiarSecuencia('default')">
+                            <span class="seq-num" id="num-default">Cargando...</span>
+                            <span class="seq-label">Secuencia Base (Automática)</span>
+                            <span class="seq-status">🔵 Activo</span>
+                        </div>
+                        <div id="seq-secundaria-box" class="seq-box seq-inactive" onclick="cambiarSecuencia('secundaria')">
+                            <span class="seq-num" id="num-secundaria">Cargando...</span>
+                            <span class="seq-label">Secuencia 1144</span>
+                            <span class="seq-status">⚪ Inactivo</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="scroll-talonario">
+                <div class="scroll-talonario" style="margin-top: 15px;">
                     <table>
                         <thead>
                             <tr>
