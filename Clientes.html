@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta de Facturas - El Guarco</title>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCi409CkmXBbun7-POejbVaIiThK2nZ1JY",
+            authDomain: "prestamos-18dd8.firebaseapp.com",
+            projectId: "prestamos-18dd8",
+            storageBucket: "prestamos-18dd8.firebasestorage.app",
+            messagingSenderId: "921713515466",
+            appId: "1:921713515466:web:0e2bcb5d67067068570d33"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let datosCargados = [];
+        let modoAgrupado = false;
+        let ordenConsolidadoAsc = false; // false = mayor a menor (desc), true = menor a mayor (asc)
+
+        // ---------- CONSULTAR FACTURAS ----------
+        window.consultarFacturas = async function() {
+            const sucursal = document.getElementById('filtroSucursal').value;
+            const fechaDesde = document.getElementById('filtroFechaDesde').value;
+            const fechaHasta = document.getElementById('filtroFechaHasta').value;
+            const tabla = document.getElementById('cuerpoTabla');
+
+            if (!fechaDesde && !fechaHasta) {
+                tabla.innerHTML = "<tr><td colspan='6' style='text-align:center;'>⚠️ Selecciona al menos una fecha.</td></tr>";
+                return;
+            }
+
+            tabla.innerHTML = "<tr><td colspan='6' style='text-align:center;'>🔍 Buscando...</td></tr>";
+
+            try {
+                const facturasRef = collection(db, "facturas_compras");
+                const condiciones = [];
+
+                if (sucursal !== "Todas") {
+                    condiciones.push(where("sucursal", "==", sucursal));
+                }
+                if (fechaDesde) {
+                    condiciones.push(where("fecha", ">=", fechaDesde));
+                }
+                if (fechaHasta) {
+                    condiciones.push(where("fecha", "<=", fechaHasta));
+                }
+
+                const q = condiciones.length > 0
+                    ? query(facturasRef, ...condiciones, orderBy("timestamp", "desc"))
+                    : query(facturasRef, orderBy("timestamp", "desc"));
+
+                const querySnapshot = await getDocs(q);
+                datosCargados = [];
+                querySnapshot.forEach(doc => datosCargados.push(doc.data()));
+
+                if (datosCargados.length === 0) {
+                    tabla.innerHTML = "<tr><td colspan='6' style='text-align:center;'>No se encontraron resultados.</td></tr>";
+                } else {
+                    renderizarTabla();
+                }
+
+            } catch (e) {
+                console.error(e);
+                tabla.innerHTML = `<tr><td colspan='6' style="color:red">Error: ${e.message}</td></tr>`;
+            }
+        };
+
+        // ---------- AGRUPAR POR CLIENTE ----------
+        function agruparPorCliente(facturas) {
+            const mapa = new Map();
+            facturas.forEach(f => {
+                const cedula = f.cedula || 'sin-cedula';
+                const clave = cedula;
+                if (!mapa.has(clave)) {
+                    mapa.set(clave, {
+                        nombre: f.nombre || 'Sin nombre',
+                        cedula: cedula,
+                        sucursales: new Set(),
+                        materiales: {},
+                        total_factura: 0,
+                        cantidad_facturas: 0
+                    });
+                }
+                const item = mapa.get(clave);
+                item.sucursales.add(f.sucursal);
+                item.total_factura += (f.total_factura || 0);
+                item.cantidad_facturas += 1;
+                if (f.detalles_materiales && Array.isArray(f.detalles_materiales)) {
+                    f.detalles_materiales.forEach(m => {
+                        const mat = m.material;
+                        const kilos = m.kilos || 0;
+                        if (item.materiales[mat]) {
+                            item.materiales[mat] += kilos;
+                        } else {
+                            item.materiales[mat] = kilos;
+                        }
+                    });
+                }
+            });
+            const resultado = [];
+            mapa.forEach((value) => {
+                const sucursalesStr = Array.from(value.sucursales).join(', ');
+                const materialesStr = Object.entries(value.materiales)
+                    .map(([mat, kg]) => `${mat}: ${kg.toFixed(2)}kg`)
+                    .join(', ');
+                resultado.push({
+                    nombre: value.nombre,
+                    cedula: value.cedula,
+                    sucursales: sucursalesStr,
+                    materiales: materialesStr,
+                    total_factura: value.total_factura,
+                    cantidad_facturas: value.cantidad_facturas
+                });
+            });
+            // Ordenar por total_factura según la variable global
+            ordenarConsolidados(resultado);
+            return resultado;
+        }
+
+        // ---------- ORDENAR CONSOLIDADOS ----------
+        function ordenarConsolidados(array) {
+            array.sort((a, b) => {
+                return ordenConsolidadoAsc ? a.total_factura - b.total_factura : b.total_factura - a.total_factura;
+            });
+        }
+
+        // ---------- ALTERNAR ORDEN CONSOLIDADO ----------
+        window.toggleOrdenConsolidado = function() {
+            if (!modoAgrupado || datosCargados.length === 0) return;
+            ordenConsolidadoAsc = !ordenConsolidadoAsc;
+            renderizarTabla();
+            // Actualizar indicador en el encabezado
+            actualizarIndicadorOrden();
+        };
+
+        function actualizarIndicadorOrden() {
+            const th = document.getElementById('th6');
+            if (modoAgrupado) {
+                th.textContent = ordenConsolidadoAsc ? 'Total Acumulado ↑' : 'Total Acumulado ↓';
+            }
+        }
+
+        // ---------- RENDERIZAR TABLA ----------
+        window.renderizarTabla = function() {
+            const tabla = document.getElementById('cuerpoTabla');
+            tabla.innerHTML = "";
+
+            if (datosCargados.length === 0) {
+                tabla.innerHTML = "<tr><td colspan='6' style='text-align:center;'>No hay datos.</td></tr>";
+                return;
+            }
+
+            let datosMostrar = modoAgrupado ? agruparPorCliente(datosCargados) : datosCargados;
+
+            if (datosMostrar.length === 0) {
+                tabla.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Sin datos para mostrar.</td></tr>";
+                return;
+            }
+
+            if (modoAgrupado) {
+                datosMostrar.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.nombre}</td>
+                        <td>${item.cedula}</td>
+                        <td>${item.sucursales}</td>
+                        <td>${item.cantidad_facturas}</td>
+                        <td style="font-size:11px;">${item.materiales}</td>
+                        <td style="font-weight:bold; color:#28a745;">₡${item.total_factura.toLocaleString()}</td>
+                    `;
+                    tabla.appendChild(row);
+                });
+            } else {
+                datosMostrar.forEach(f => {
+                    const row = document.createElement('tr');
+                    let detalleMat = '';
+                    if (f.detalles_materiales && Array.isArray(f.detalles_materiales)) {
+                        detalleMat = f.detalles_materiales.map(m => `${m.material}: ${m.kilos}kg`).join(', ');
+                    }
+                    row.innerHTML = `
+                        <td>${f.fecha}</td>
+                        <td><b class="badge-${(f.sucursal || '').toLowerCase()}">${f.sucursal}</b></td>
+                        <td style="font-weight:bold; color:#1a73e8;">${f.num_factura}</td>
+                        <td>${f.nombre} <br><small>${f.cedula}</small></td>
+                        <td style="font-size:11px;">${detalleMat}</td>
+                        <td style="font-weight:bold; color:#28a745;">₡${(f.total_factura || 0).toLocaleString()}</td>
+                    `;
+                    tabla.appendChild(row);
+                });
+            }
+            actualizarIndicadorOrden();
+        };
+
+        // ---------- CAMBIAR MODO ----------
+        window.toggleModo = function() {
+            modoAgrupado = !modoAgrupado;
+            document.getElementById('btnModo').innerText = modoAgrupado ? "📋 Ver Detalle" : "📊 Consolidar por Cliente";
+            // Reiniciar orden a mayor a menor al activar consolidado
+            if (modoAgrupado) {
+                ordenConsolidadoAsc = false;
+            }
+            if (datosCargados.length > 0) renderizarTabla();
+            actualizarCabeceras();
+            actualizarIndicadorOrden();
+        };
+
+        // ---------- ACTUALIZAR CABECERAS ----------
+        function actualizarCabeceras() {
+            const th1 = document.getElementById('th1');
+            const th2 = document.getElementById('th2');
+            const th3 = document.getElementById('th3');
+            const th4 = document.getElementById('th4');
+            const th5 = document.getElementById('th5');
+            const th6 = document.getElementById('th6');
+            if (modoAgrupado) {
+                th1.textContent = 'Cliente';
+                th2.textContent = 'Cédula';
+                th3.textContent = 'Sucursales';
+                th4.textContent = '# Facturas';
+                th5.textContent = 'Materiales (total kg)';
+                th6.textContent = 'Total Acumulado ↓'; // indicador inicial
+                th6.style.cursor = 'pointer';
+                th6.onclick = window.toggleOrdenConsolidado;
+                // quitar eventos de otros th
+                th1.onclick = null;
+                th2.onclick = null;
+                th3.onclick = null;
+                th4.onclick = null;
+                th5.onclick = null;
+            } else {
+                th1.textContent = 'Fecha';
+                th2.textContent = 'Sucursal';
+                th3.textContent = 'N° Factura';
+                th4.textContent = 'Cliente / Cédula';
+                th5.textContent = 'Detalle Materiales';
+                th6.textContent = 'Total Pagado';
+                th6.style.cursor = 'default';
+                th6.onclick = null;
+            }
+        }
+
+        window.onload = function() {
+            actualizarCabeceras();
+            actualizarIndicadorOrden();
+        };
+    </script>
+
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; margin: 0; }
+        .container { max-width: 1100px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; }
+        .filtros { display: flex; gap: 10px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; align-items: flex-end; flex-wrap: wrap; }
+        .filtros div { flex: 1; min-width: 150px; }
+        label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #444; }
+        select, input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        .btn-buscar { background: #1a73e8; color: white; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .btn-modo { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:hover { opacity: 0.9; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #1a73e8; color: white; padding: 12px; text-align: left; font-size: 14px; }
+        th.sortable { cursor: pointer; user-select: none; }
+        th.sortable:hover { background: #1557b0; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+        tr:hover { background: #f1f1f1; }
+        .badge-perez { color: #e67e22; }
+        .badge-cartago { color: #2980b9; }
+        .badge-paraiso { color: #27ae60; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>📋 Registro de Facturas por Sucursal y Fechas</h2>
+    <div class="filtros">
+        <div>
+            <label>Sucursal</label>
+            <select id="filtroSucursal">
+                <option value="Todas">Todas las sucursales</option>
+                <option value="Perez">Pérez Zeledón</option>
+                <option value="Cartago">Cartago</option>
+                <option value="Paraiso">Paraíso</option>
+            </select>
+        </div>
+        <div>
+            <label>Fecha Desde</label>
+            <input type="date" id="filtroFechaDesde">
+        </div>
+        <div>
+            <label>Fecha Hasta</label>
+            <input type="date" id="filtroFechaHasta">
+        </div>
+        <button class="btn-buscar" onclick="consultarFacturas()">🔍 Buscar</button>
+        <button id="btnModo" class="btn-modo" onclick="toggleModo()">📊 Consolidar por Cliente</button>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th id="th1">Fecha</th>
+                <th id="th2">Sucursal</th>
+                <th id="th3">N° Factura</th>
+                <th id="th4">Cliente / Cédula</th>
+                <th id="th5">Detalle Materiales</th>
+                <th id="th6" class="sortable">Total Pagado</th>
+            </tr>
+        </thead>
+        <tbody id="cuerpoTabla">
+            <tr><td colspan="6" style="text-align:center; padding:30px; color:#888;">Selecciona sucursal y rango de fechas, luego presiona Buscar.</td></tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>
