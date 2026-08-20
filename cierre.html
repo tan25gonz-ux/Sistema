@@ -38,10 +38,6 @@
         let totalAcumuladoComprasDia = 0;
         let sucursalActual = "Desconocida";
 
-        let secuenciaActiva = ''; 
-        const ID_SECUNDARIA = '1144'; 
-        let temporizadorFirestore = null; 
-
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 uidTrabajador = user.uid;
@@ -76,10 +72,7 @@
                 await cargarPreciosDesdeFirebase();
                 await calcularDeudaTotal();
                 await cargarUltimoCierre();
-                
-                await cargarNumerosSecuencias();
-                await cambiarSecuencia('default');
-
+                await obtenerSiguienteNumeroFactura();
                 actualizarTablaGeneralDia(); 
                 actualizarTablaGastos();
                 actualizarTablaDepositos();
@@ -89,48 +82,9 @@
             }
         });
 
-        async function cargarNumerosSecuencias() {
+        async function obtenerSiguienteNumeroFactura() {
             try {
-                const refBase = doc(db, "contadores_facturas", sucursalActual);
-                const snapBase = await getDoc(refBase);
-                const numBase = snapBase.exists() ? (snapBase.data().ultimo_numero || 0) + 1 : 1;
-                document.getElementById('num-default').innerText = numBase;
-
-                const refSec = doc(db, "contadores_facturas", `${sucursalActual}_${ID_SECUNDARIA}`);
-                const snapSec = await getDoc(refSec);
-                const numSec = snapSec.exists() ? (snapSec.data().ultimo_numero || 0) + 1 : 1;
-                document.getElementById('num-secundaria').innerText = numSec;
-
-            } catch (error) {
-                console.error("Error al cargar los números de secuencia:", error);
-            }
-        }
-
-        window.cambiarSecuencia = async function(tipo) {
-            secuenciaActiva = (tipo === 'default') ? '' : ID_SECUNDARIA;
-            
-            const boxDefault = document.getElementById('seq-default-box');
-            const boxSec = document.getElementById('seq-secundaria-box');
-            
-            if (secuenciaActiva === '') {
-                boxDefault.className = 'seq-box seq-active';
-                boxDefault.querySelector('.seq-status').innerText = '🔵 Activo';
-                boxSec.className = 'seq-box seq-inactive';
-                boxSec.querySelector('.seq-status').innerText = '⚪ Inactivo';
-            } else {
-                boxSec.className = 'seq-box seq-active';
-                boxSec.querySelector('.seq-status').innerText = '🔵 Activo';
-                boxDefault.className = 'seq-box seq-inactive';
-                boxDefault.querySelector('.seq-status').innerText = '⚪ Inactivo';
-            }
-
-            await obtenerSiguienteNumeroFacturaActual();
-        }
-
-        async function obtenerSiguienteNumeroFacturaActual() {
-            try {
-                const idContador = secuenciaActiva ? `${sucursalActual}_${secuenciaActiva}` : sucursalActual;
-                const docRef = doc(db, "contadores_facturas", idContador);
+                const docRef = doc(db, "contadores_facturas", sucursalActual);
                 const docSnap = await getDoc(docRef);
                 let siguienteNum = 1;
 
@@ -235,6 +189,9 @@
                     else if (data.tipo === "Deposito") deudaCalculada -= monto; 
                 });
                 
+                // 💰 CORRECCIÓN: El depósito del jefe es un préstamo, por lo tanto AUMENTA la deuda.
+                deudaCalculada += obtenerTotalDepositos();
+
                 document.getElementById('deudaTotalTxt').innerText = deudaCalculada.toLocaleString('es-CR');
             } catch (error) {
                 console.error("Error calculando la deuda: ", error);
@@ -375,8 +332,7 @@
                     ultima_actualizacion: serverTimestamp()
                 }, { merge: true });
 
-                const idContador = secuenciaActiva ? `${sucursalActual}_${secuenciaActiva}` : sucursalActual;
-                const docRef = doc(db, "contadores_facturas", idContador);
+                const docRef = doc(db, "contadores_facturas", sucursalActual);
                 const docSnap = await getDoc(docRef);
                 let ultimoNum = 0;
                 if (docSnap.exists()) {
@@ -395,7 +351,6 @@
 
             facturasDelDia.push({
                 num_factura: numFactura,
-                serie: secuenciaActiva,
                 cedula: cedulaLimpia,
                 nombre,
                 detalles_materiales: materialesIngresados,
@@ -406,8 +361,7 @@
 
             actualizarTablaGeneralDia();
             limpiarFormularioFactura();
-            await cargarNumerosSecuencias();
-            await obtenerSiguienteNumeroFacturaActual();
+            await obtenerSiguienteNumeroFactura();
             document.getElementById('cedulaCliente').focus();
         };
 
@@ -419,6 +373,7 @@
             document.getElementById('subtotalFacturaTxt').innerText = "0";
         }
 
+        // --- GESTIÓN DE DEPÓSITOS (AGREGAR PLATA) ---
         window.agregarDepositoLista = () => {
             const desc = document.getElementById('depositoDescInput').value.trim();
             const monto = obtenerNumeroLimpio('depositoMontoInput');
@@ -435,12 +390,14 @@
             document.getElementById('depositoMontoInput').value = "";
 
             actualizarTablaDepositos();
+            calcularDeudaTotal(); // Actualiza la deuda (sumando el depósito)
         };
 
         window.eliminarDepositoLista = (index) => {
             listaDepositosDia.splice(index, 1);
             localStorage.setItem(`depositos_${sucursalActual}`, JSON.stringify(listaDepositosDia));
             actualizarTablaDepositos();
+            calcularDeudaTotal(); // Actualiza la deuda (restando el depósito eliminado)
         };
 
         function obtenerTotalDepositos() {
@@ -471,6 +428,7 @@
             calcularCajaDinamica();
         }
 
+        // --- GESTIÓN DE GASTOS ---
         window.agregarGastoLista = () => {
             const desc = document.getElementById('gastoDescInput').value.trim();
             const monto = obtenerNumeroLimpio('gastoMontoInput');
@@ -537,6 +495,7 @@
             return parseFloat(textoLimpio) || 0;
         }
 
+        // --- LÓGICA PRINCIPAL: CALCULAR Y TRANSMITIR CAJA EN TIEMPO REAL ---
         window.calcularCajaDinamica = () => {
             const inicioBase = obtenerNumeroLimpio('cajaInicioBase');
             const ventas = obtenerNumeroLimpio('ventas');
@@ -552,10 +511,7 @@
             localStorage.setItem(`cajaInicioBase_${sucursalActual}`, document.getElementById('cajaInicioBase').value);
             localStorage.setItem(`ventas_${sucursalActual}`, document.getElementById('ventas').value);
 
-            clearTimeout(temporizadorFirestore);
-            temporizadorFirestore = setTimeout(() => {
-                actualizarCajaFirestore(disponibleCaja);
-            }, 1000);
+            actualizarCajaFirestore(disponibleCaja);
         };
 
         async function actualizarCajaFirestore(disponible) {
@@ -593,7 +549,7 @@
 
                     tbody.innerHTML += `
                         <tr>
-                            <td><b>Fact: #${fact.num_factura}</b> ${fact.serie ? '('+fact.serie+')' : ''}</td>
+                            <td><b>Fact: #${fact.num_factura}</b></td>
                             <td><b>${fact.nombre}</b><br><small style="color:#555">${fact.cedula}</small></td>
                             <td style="max-width: 250px; font-size:11px; color:#444;">${resumenMats}</td>
                             <td><b>₡${montoFactura.toLocaleString('es-CR')}</b></td>
@@ -627,6 +583,7 @@
             actualizarTablaGeneralDia();
         };
 
+        // --- IMPRESIÓN ADAPTADA PARA RECIBOS DE 80mm ---
         window.imprimirFactura = (index) => {
             const fact = facturasDelDia[index];
             if (!fact) return;
@@ -636,9 +593,10 @@
                 `<tr><td>${m.material}</td><td>${m.kilos} kg</td><td>₡${m.precio_unitario.toLocaleString('es-CR')}</td><td>₡${m.total_pago.toLocaleString('es-CR')}</td></tr>`
             ).join('');
 
+            // Estilo CSS especial para impresora térmica de 80mm (ancho de impresión útil ~72mm)
             const contenido = `
                 <html>
-                <head><title>Factura #${fact.num_factura} ${fact.serie || ''}</title>
+                <head><title>Factura #${fact.num_factura}</title>
                 <style>
                     @page { margin: 5mm; size: 80mm auto; }
                     body { font-family: Arial, sans-serif; font-size: 12px; max-width: 72mm; margin: 0 auto; padding: 0; }
@@ -654,7 +612,7 @@
                 </head>
                 <body>
                     <h2>📍 ${sucursalActual}</h2>
-                    <h2>FACTURA #${fact.num_factura} ${fact.serie ? '('+fact.serie+')' : ''}</h2>
+                    <h2>FACTURA #${fact.num_factura}</h2>
                     <div class="info">
                         <p><b>Fecha:</b> ${fecha}</p>
                         <p><b>Cliente:</b> ${fact.nombre}</p>
@@ -705,7 +663,6 @@
                     detalles_depositos: listaDepositosDia,
                     pago_materiales: totalAcumuladoComprasDia,
                     gastos_facturas: obtenerTotalGastos(),
-                    detalles_gastos: listaGastosDia,
                     cierre_mano: obtenerNumeroLimpio('cierreMano'),
                     estado: "Pendiente", timestamp: serverTimestamp()
                 });
@@ -823,33 +780,6 @@
         .scroll-precios { max-height: 300px; overflow-y: auto; margin-bottom: 12px; border-radius: 8px; }
         .box-ultimo-cierre { background: #edf2f7; border-left: 4px solid #3182ce; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #2d3748; }
         .btn-print { background: #2b6cb0; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
-
-        .seq-box {
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 10px 12px;
-            cursor: pointer;
-            flex: 1;
-            text-align: center;
-            transition: all 0.2s;
-            background: #f8fafc;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-        .seq-box:hover { background: #f1f5f9; }
-        .seq-active {
-            border-color: #2563eb;
-            background: #eff6ff;
-            box-shadow: 0 0 0 1px #2563eb;
-        }
-        .seq-inactive {
-            opacity: 0.8;
-        }
-        .seq-num { font-size: 18px; font-weight: bold; color: #0f172a; }
-        .seq-label { font-size: 11px; color: #64748b; }
-        .seq-status { font-size: 12px; font-weight: 600; }
-
         @media(max-width: 850px) {
             .grid-layout { grid-template-columns: 1fr; gap: 16px; }
             body { padding: 8px; }
@@ -900,28 +830,11 @@
                     </div>
                     <div>
                         <label># Número de Factura</label>
-                        <!-- ✅ CAMBIO: Quitado el atributo "readonly", ahora es editable -->
                         <input type="text" id="numFacturaCliente" placeholder="Automático" style="border: 1px solid #2b6cb0; font-weight: bold; background: #fff;">
                     </div>
                 </div>
 
-                <div style="grid-column: 1 / -1; margin-top: 10px;">
-                    <label>Seleccionar Secuencia de Facturación Activa:</label>
-                    <div style="display: flex; gap: 12px; margin-top: 5px;">
-                        <div id="seq-default-box" class="seq-box seq-active" onclick="cambiarSecuencia('default')">
-                            <span class="seq-num" id="num-default">Cargando...</span>
-                            <span class="seq-label">Secuencia Base (Automática)</span>
-                            <span class="seq-status">🔵 Activo</span>
-                        </div>
-                        <div id="seq-secundaria-box" class="seq-box seq-inactive" onclick="cambiarSecuencia('secundaria')">
-                            <span class="seq-num" id="num-secundaria">Cargando...</span>
-                            <span class="seq-label">Secuencia 1144</span>
-                            <span class="seq-status">⚪ Inactivo</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="scroll-talonario" style="margin-top: 15px;">
+                <div class="scroll-talonario">
                     <table>
                         <thead>
                             <tr>
@@ -948,7 +861,7 @@
                     <table>
                         <thead>
                             <tr>
-                                <th># Factura / Secuencia</th>
+                                <th># Factura</th>
                                 <th>Cliente</th>
                                 <th>Detalle</th>
                                 <th>Monto</th>
@@ -984,7 +897,7 @@
                 <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;">
                     <div>
                         <label>Inicio de Caja Base (₡)</label>
-                        <input type="text" id="cajaInicioBase" placeholder="ej: 1 000 000" oninput="formatearInputMoneda(this)" onchange="calcularCajaDinamica()">
+                        <input type="text" id="cajaInicioBase" placeholder="ej: 1 000 000" oninput="formatearInputMoneda(this)">
                     </div>
                     <div>
                         <label>💵 Caja Disponible Hoy (₡)</label>
@@ -992,7 +905,7 @@
                     </div>
                     <div>
                         <label>Ventas del Día (₡)</label>
-                        <input type="text" id="ventas" oninput="formatearInputMoneda(this)" onchange="calcularCajaDinamica()">
+                        <input type="text" id="ventas" oninput="formatearInputMoneda(this)">
                     </div>
                     <div>
                         <label>Plata Agregada / Depósitos (₡)</label>
