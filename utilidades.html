@@ -154,7 +154,7 @@
 
         .kpi-container {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 14px;
             margin-bottom: 20px;
         }
@@ -272,12 +272,36 @@
                     <input type="number" id="kilosContenedor" placeholder="Ej: 20000">
                 </div>
 
+                <!-- CAMBIO: Ahora pide Precio de Compra (Costo) en lugar de Precio de Venta -->
                 <div class="form-group">
-                    <label>Precio Venta / Exportación (₡ por kg)</label>
-                    <input type="number" id="precioKgContenedor" placeholder="Ej: 165">
+                    <label>Costo de Compra del Material (₡ por kg)</label>
+                    <input type="number" id="costoKgContenedor" placeholder="Ej: 80">
                 </div>
 
                 <button class="btn-accion" onclick="registrarContenedorBD()">🚢 Registrar y Despachar</button>
+            </div>
+
+            <!-- Panel de Ganancias por Material -->
+            <div class="card">
+                <h3>⚙️ Ganancia por Material</h3>
+                <div class="form-group">
+                    <label>Material</label>
+                    <input type="text" id="matGananciaInput" placeholder="Ej: Chatarra">
+                </div>
+                <div class="form-group">
+                    <label>Ganancia por Kilo (₡)</label>
+                    <input type="number" id="gananciaKiloInput" placeholder="Ej: 15">
+                </div>
+                <button class="btn-accion" style="background:#7c3aed;" onclick="guardarGananciaConfig()">💾 Guardar Ganancia</button>
+
+                <div class="table-responsive" style="margin-top:15px;">
+                    <table>
+                        <thead><tr><th>Material</th><th>Ganancia/Kg</th><th></th></tr></thead>
+                        <tbody id="bodyGananciasConfig">
+                            <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding: 10px;">Cargando configuraciones...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -295,6 +319,10 @@
                 <div class="kpi-card">
                     <div class="label">🟢 Ventas Contenedores</div>
                     <div class="value" id="kpiEntradaVentas" style="color: var(--primary);">₡0</div>
+                </div>
+                <div class="kpi-card" style="background:#faf5ff; border-color:#d8b4fe;">
+                    <div class="label">💰 Ganancia Extra (Margen)</div>
+                    <div class="value" id="kpiGananciaExtra" style="color: #7c3aed;">₡0</div>
                 </div>
                 <div class="kpi-card kpi-caja">
                     <div class="label">💰 Flujo Real Neto En Caja</div>
@@ -351,12 +379,13 @@
                                 <th>Fecha</th>
                                 <th>Material</th>
                                 <th>Kilos</th>
-                                <th>Precio / kg</th>
+                                <th>Costo Compra/kg</th>
+                                <th>Precio Venta/kg</th>
                                 <th>Total Cobrado</th>
                             </tr>
                         </thead>
                         <tbody id="bodyContenedores">
-                            <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding: 15px;">Cargando...</td></tr>
+                            <tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 15px;">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -373,6 +402,7 @@
         let facturasBD = [];
         let contenedoresBD = [];
         let faltantesBD = [];
+        let configGanancias = {}; 
 
         const firebaseConfig = {
             apiKey: "AIzaSyDGCjpFS1spdyQcFzIjd-8S9GGkOe5fuX8",
@@ -406,25 +436,83 @@
             el.style.color = esError ? '#dc2626' : '#16a34a';
         }
 
+        // --- Lógica de Ganancias por Material ---
+        async function cargarConfigGanancias() {
+            try {
+                const docSnap = await db.collection("configuracion_utilidades").doc("ganancias_por_material").get();
+                if (docSnap.exists) {
+                    configGanancias = docSnap.data().datos || {};
+                } else {
+                    configGanancias = {};
+                }
+                renderizarTablaGanancias();
+            } catch (e) {
+                console.error("Error cargando ganancias", e);
+            }
+        }
+
+        function renderizarTablaGanancias() {
+            const tbody = document.getElementById('bodyGananciasConfig');
+            tbody.innerHTML = "";
+            const keys = Object.keys(configGanancias);
+            if (keys.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding: 10px;">Sin ganancias configuradas.</td></tr>`;
+                return;
+            }
+            keys.forEach(mat => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><b>${formatearNombre(mat)}</b></td>
+                        <td>₡${configGanancias[mat]}</td>
+                        <td><button class="btn-reset" style="width:auto; background:#fee2e2; color:#dc2626; padding:2px 8px; margin-top:0;" onclick="eliminarGananciaConfig('${mat}')">x</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function guardarGananciaConfig() {
+            const mat = document.getElementById('matGananciaInput').value.trim();
+            const ganancia = parseFloat(document.getElementById('gananciaKiloInput').value);
+            if (!mat || isNaN(ganancia) || ganancia < 0) {
+                alert("⚠️ Complete los datos correctamente.");
+                return;
+            }
+            
+            const matNormalizado = normalizarTexto(mat);
+            configGanancias[matNormalizado] = ganancia;
+            await db.collection("configuracion_utilidades").doc("ganancias_por_material").set({ datos: configGanancias });
+            
+            document.getElementById('matGananciaInput').value = '';
+            document.getElementById('gananciaKiloInput').value = '';
+            renderizarTablaGanancias();
+            mostrarEstado("✅ Ganancia configurada y guardada en la BD.");
+        }
+
+        async function eliminarGananciaConfig(mat) {
+            if(confirm(`¿Eliminar la ganancia para "${formatearNombre(mat)}"?`)) {
+                delete configGanancias[mat];
+                await db.collection("configuracion_utilidades").doc("ganancias_por_material").set({ datos: configGanancias });
+                renderizarTablaGanancias();
+            }
+        }
+
+        // --- Lógica Principal de Datos ---
         async function cargarDatosBD() {
             mostrarEstado("⏳ Consultando Firestore (facturas_compras, contenedores y revisiones_faltantes)...");
             try {
-                // 1. Facturas Compras
                 const snapFacturas = await db.collection("facturas_compras").get();
                 facturasBD = [];
                 snapFacturas.forEach(doc => facturasBD.push({ id: doc.id, ...doc.data() }));
 
-                // 2. Contenedores
                 const snapContenedores = await db.collection("contenedores").get();
                 contenedoresBD = [];
                 snapContenedores.forEach(doc => contenedoresBD.push({ id: doc.id, ...doc.data() }));
 
-                // 3. Revisiones y Faltantes / Gastos Operativos
                 const snapFaltantes = await db.collection("revisiones_faltantes").get();
                 faltantesBD = [];
                 snapFaltantes.forEach(doc => faltantesBD.push({ id: doc.id, ...doc.data() }));
 
-                mostrarEstado(`✅ Éxito: Se cargaron ${facturasBD.length} facturas, ${contenedoresBD.length} contenedores y ${faltantesBD.length} registros de revisiones/gastos.`);
+                mostrarEstado(`✅ Éxito: Se cargaron ${facturasBD.length} facturas, ${contenedoresBD.length} contenedores y ${faltantesBD.length} registros de gastos.`);
                 procesarYRenderizar(facturasBD, contenedoresBD, faltantesBD);
             } catch (error) {
                 console.error("Error al conectar:", error);
@@ -434,7 +522,6 @@
 
         function extraerMaterialesDeFactura(factura) {
             const materiales = [];
-            
             if (Array.isArray(factura.detalles_materiales)) {
                 factura.detalles_materiales.forEach(item => {
                     materiales.push({
@@ -505,7 +592,6 @@
 
             let totalInversionFacturas = 0;
 
-            // 1. Procesar Compras (facturas_compras)
             facturasList.forEach(fact => {
                 totalInversionFacturas += parseFloat(fact.total_factura || fact.total || 0);
                 const desgloses = extraerMaterialesDeFactura(fact);
@@ -519,36 +605,38 @@
                 });
             });
 
-            // 2. Procesar Contenedores (Ventas)
             let totalVentasContenedores = 0;
+            let totalGananciaExtra = 0;
             const tbodyCont = document.getElementById('bodyContenedores');
             tbodyCont.innerHTML = "";
 
             contenedoresList.forEach(c => {
                 totalVentasContenedores += parseFloat(c.total || 0);
+                totalGananciaExtra += parseFloat(c.ganancia_calculada || 0); 
 
                 const matObj = obtenerOCrearMaterial(c.material);
                 if (matObj) {
                     matObj.kilosEnviados += parseFloat(c.kilos || 0);
                 }
 
+                // Actualizado para mostrar el Costo y el Precio de Venta calculado
                 tbodyCont.innerHTML += `
                     <tr>
                         <td><strong>${c.codigo || 'S/C'}</strong></td>
                         <td>${c.fecha || ''}</td>
                         <td>${formatearNombre(c.material)}</td>
                         <td>${(c.kilos || 0).toLocaleString()} kg</td>
-                        <td>₡${(c.precioKg || 0).toLocaleString()}</td>
+                        <td>₡${(c.costo_compra || 0).toLocaleString()}</td>
+                        <td>₡${(c.precio_venta_kg || 0).toLocaleString()}</td>
                         <td style="color:var(--primary); font-weight:700;">₡${(c.total || 0).toLocaleString()}</td>
                     </tr>
                 `;
             });
 
             if (contenedoresList.length === 0) {
-                tbodyCont.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8; padding: 15px;">No hay contenedores registrados.</td></tr>`;
+                tbodyCont.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 15px;">No hay contenedores registrados.</td></tr>`;
             }
 
-            // 3. Procesar Gastos desde 'gastos_facturas' en revisiones_faltantes
             let totalGastosFaltantes = 0;
             const tbodyGastos = document.getElementById('bodyGastos');
             tbodyGastos.innerHTML = "";
@@ -577,7 +665,6 @@
                 tbodyGastos.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding: 15px;">No se encontraron gastos de facturas registrados.</td></tr>`;
             }
 
-            // 4. Renderizar Inventario Dinámico (Todos los materiales)
             const tbodyInv = document.getElementById('bodyInventario');
             tbodyInv.innerHTML = "";
             const clavesMateriales = Object.keys(resumenMat);
@@ -603,12 +690,12 @@
                 });
             }
 
-            // 5. Cálculos de KPIs Finales
             const flujoNeto = totalVentasContenedores - (totalInversionFacturas + totalGastosFaltantes);
             document.getElementById('kpiSalidaCompras').innerText = `- ₡${totalInversionFacturas.toLocaleString()}`;
             document.getElementById('kpiGastosCierre').innerText = `- ₡${totalGastosFaltantes.toLocaleString()}`;
             document.getElementById('kpiEntradaVentas').innerText = `+ ₡${totalVentasContenedores.toLocaleString()}`;
-            
+            document.getElementById('kpiGananciaExtra').innerText = `+ ₡${totalGananciaExtra.toLocaleString()}`;
+
             const elFlujo = document.getElementById('kpiFlujoNeto');
             elFlujo.innerText = `${flujoNeto >= 0 ? '+' : ''} ₡${flujoNeto.toLocaleString()}`;
             elFlujo.style.color = flujoNeto >= 0 ? 'var(--success)' : 'var(--danger)';
@@ -619,20 +706,32 @@
             const fecha = document.getElementById('fechaContenedor').value;
             const material = document.getElementById('matContenedor').value;
             const kilos = parseFloat(document.getElementById('kilosContenedor').value);
-            const precioKg = parseFloat(document.getElementById('precioKgContenedor').value);
+            // CAMBIO: Leemos el costo de compra ingresado por el usuario
+            const costoCompra = parseFloat(document.getElementById('costoKgContenedor').value);
 
-            if (!codigo || !fecha || !material || isNaN(kilos) || isNaN(precioKg)) {
+            if (!codigo || !fecha || !material || isNaN(kilos) || isNaN(costoCompra)) {
                 alert("Por favor complete todos los campos del contenedor.");
                 return;
             }
+
+            // Lógica de cálculo automático
+            const matKey = normalizarTexto(material);
+            const gananciaPorKg = configGanancias[matKey] || 0; 
+            
+            const precioVentaKg = costoCompra + gananciaPorKg;
+            const totalVenta = kilos * precioVentaKg;
+            const gananciaTotal = kilos * gananciaPorKg;
 
             const nuevoContenedor = {
                 codigo,
                 fecha,
                 material,
                 kilos,
-                precioKg,
-                total: kilos * precioKg,
+                costo_compra: costoCompra,         // Guardamos el costo de compra
+                ganancia_por_kg: gananciaPorKg,     // Guardamos la ganancia por kg utilizada
+                precio_venta_kg: precioVentaKg,     // Guardamos el precio de venta calculado
+                total: totalVenta,                  // Guardamos el total cobrado
+                ganancia_calculada: gananciaTotal,  // Guardamos la ganancia extra
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp()
             };
 
@@ -643,7 +742,7 @@
                 document.getElementById('numContenedor').value = '';
                 document.getElementById('matContenedor').value = '';
                 document.getElementById('kilosContenedor').value = '';
-                document.getElementById('precioKgContenedor').value = '';
+                document.getElementById('costoKgContenedor').value = ''; // Limpiamos el costo
 
                 cargarDatosBD();
             } catch (error) {
@@ -653,6 +752,7 @@
         }
 
         window.onload = function() {
+            cargarConfigGanancias();
             cargarDatosBD();
         };
     </script>
