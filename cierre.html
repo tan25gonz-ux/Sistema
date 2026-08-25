@@ -654,15 +654,24 @@
         };
 
         // =======================================================
-        // 🖨️ FUNCIÓN DE IMPRESIÓN - TODO A LA IZQUIERDA, SIN LÍNEAS VERTICALES, FIRMA CON GUIONES
+        // 🖨️ FUNCIÓN DE IMPRESIÓN - SIN TILDES Y SIN SÍMBOLO ₡ (USA CRC)
         // =======================================================
         window.imprimirFactura = (index) => {
             const fact = facturasDelDia[index];
             if (!fact) return;
 
+            // Función para limpiar tildes y cambiar el símbolo de colones
+            const normalizar = (texto) => {
+                if (typeof texto !== 'string') texto = String(texto);
+                return texto
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/₡/g, 'CRC');
+            };
+
             const fecha = document.getElementById('fecha').value || new Date().toLocaleDateString('es-CR');
             
-            // Obtener datos de la sucursal
+            // Datos de la sucursal
             const datosSuc = datosSucursales[sucursalActual] || {
                 nombre: sucursalActual,
                 encargado: "",
@@ -672,22 +681,21 @@
                 correo: ""
             };
 
-            // Construir líneas de información de la sucursal
+            // Construir líneas de información de la sucursal (normalizadas)
             let linesSuc = [];
-            if (datosSuc.nombre) linesSuc.push(datosSuc.nombre);
-            if (datosSuc.encargado) linesSuc.push(datosSuc.encargado);
-            if (datosSuc.cedula) linesSuc.push("Céd.: " + datosSuc.cedula);
-            if (datosSuc.direccion) linesSuc.push("Dir.: " + datosSuc.direccion);
-            if (datosSuc.telefono) linesSuc.push("Tel.: " + datosSuc.telefono);
-            if (datosSuc.correo) linesSuc.push("Correo: " + datosSuc.correo);
+            if (datosSuc.nombre) linesSuc.push(normalizar(datosSuc.nombre));
+            if (datosSuc.encargado) linesSuc.push(normalizar(datosSuc.encargado));
+            if (datosSuc.cedula) linesSuc.push("Ced.: " + normalizar(datosSuc.cedula));
+            if (datosSuc.direccion) linesSuc.push("Dir.: " + normalizar(datosSuc.direccion));
+            if (datosSuc.telefono) linesSuc.push("Tel.: " + normalizar(datosSuc.telefono));
+            if (datosSuc.correo) linesSuc.push("Correo: " + normalizar(datosSuc.correo));
             const sucHtml = linesSuc.map(line => `<div>${line}</div>`).join('');
 
             // Generar filas de materiales sin bordes, con espacio entre columnas
             let materialesHtml = '';
             fact.detalles_materiales.forEach(m => {
-                // Formatear: nombre, kilos, precio unitario, total
-                // Usamos un ancho fijo aproximado con espacios (en impresoras matriciales se ve bien con fuente monoespaciada)
-                const nombre = m.material.padEnd(20, ' ');
+                // Normalizar nombre del material (por si tiene acentos)
+                const nombre = normalizar(m.material).padEnd(20, ' ');
                 const kilos = m.kilos.toFixed(1).padStart(8, ' ');
                 const precio = m.precio_unitario.toLocaleString('es-CR').padStart(8, ' ');
                 const total = m.total_pago.toLocaleString('es-CR').padStart(10, ' ');
@@ -800,31 +808,31 @@
                 <body>
                     <div class="header">
                         <div>${sucHtml}</div>
-                        <div class="factura-titulo">FACTURA #${fact.num_factura} ${fact.serie ? '('+fact.serie+')' : ''}</div>
+                        <div class="factura-titulo">${normalizar('FACTURA #' + fact.num_factura + (fact.serie ? ' ('+fact.serie+')' : ''))}</div>
                     </div>
 
                     <div class="info">
-                        <div><strong>Fecha:</strong> ${fecha}</div>
-                        <div><strong>Cliente:</strong> ${fact.nombre}</div>
-                        <div><strong>Cédula:</strong> ${fact.cedula}</div>
+                        <div><strong>${normalizar('Fecha:')}</strong> ${normalizar(fecha)}</div>
+                        <div><strong>${normalizar('Cliente:')}</strong> ${normalizar(fact.nombre)}</div>
+                        <div><strong>${normalizar('Cedula:')}</strong> ${normalizar(fact.cedula)}</div>
                     </div>
 
                     <div class="materiales">
-                        <div class="cabecera">Material               Kg    ₡/Kg     Total</div>
+                        <div class="cabecera">${normalizar('Material               Kg    CRC/Kg     Total')}</div>
                         ${materialesHtml}
                     </div>
 
-                    <div class="total">Total: ₡${fact.total_factura.toLocaleString('es-CR')}</div>
+                    <div class="total">${normalizar('Total: CRC ' + fact.total_factura.toLocaleString('es-CR'))}</div>
 
                     <div class="firma">
-                        <div class="label">Firma del Cliente</div>
+                        <div class="label">${normalizar('Firma del Cliente')}</div>
                         <div class="guiones">
                             ${firmaGuiones}
                         </div>
-                        <div class="acepto">(Acepto el contenido de esta factura)</div>
+                        <div class="acepto">${normalizar('(Acepto el contenido de esta factura)')}</div>
                     </div>
 
-                    <div class="footer">Gracias por su visita</div>
+                    <div class="footer">${normalizar('Gracias por su visita')}</div>
                     <div class="extra-papel"></div>
                 </body>
                 </html>
