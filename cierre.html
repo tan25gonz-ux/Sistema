@@ -42,7 +42,7 @@
         const ID_SECUNDARIA = '1144'; 
         let temporizadorFirestore = null; 
 
-        // Datos de cada sucursal
+        // ---------- DATOS DE CADA SUCURSAL ----------
         const datosSucursales = {
             "Paraiso": {
                 nombre: "Grupo Ingeniería Verde",
@@ -654,18 +654,13 @@
         };
 
         // =======================================================
-        // 🖨️ FUNCIÓN DE IMPRESIÓN CON DATOS DE CADA SUCURSAL
+        // 🖨️ FUNCIÓN DE IMPRESIÓN PARA MATRICIAL (SIN LÍNEAS VERTICALES)
         // =======================================================
         window.imprimirFactura = (index) => {
             const fact = facturasDelDia[index];
             if (!fact) return;
 
             const fecha = document.getElementById('fecha').value || new Date().toLocaleDateString('es-CR');
-            const detalles = fact.detalles_materiales.map(m => 
-                `<tr><td>${m.material}</td><td>${m.kilos} kg</td><td>₡${m.precio_unitario.toLocaleString('es-CR')}</td><td>₡${m.total_pago.toLocaleString('es-CR')}</td></tr>`
-            ).join('');
-
-            // Obtener los datos de la sucursal actual
             const datosSuc = datosSucursales[sucursalActual] || {
                 nombre: sucursalActual,
                 encargado: "",
@@ -676,121 +671,112 @@
             };
 
             // Construir el bloque de información de la sucursal
-            let infoSucursal = `<div style="font-size:12px; margin-bottom:4px; line-height:1.5;">`;
-            infoSucursal += `<strong>${datosSuc.nombre}</strong><br>`;
-            if (datosSuc.encargado) infoSucursal += `${datosSuc.encargado}<br>`;
-            if (datosSuc.cedula) infoSucursal += `Céd.: ${datosSuc.cedula}<br>`;
-            if (datosSuc.direccion) infoSucursal += `Dir.: ${datosSuc.direccion}<br>`;
-            if (datosSuc.telefono) infoSucursal += `Tel.: ${datosSuc.telefono}<br>`;
+            let infoSucursal = `${datosSuc.nombre}\n`;
+            if (datosSuc.encargado) infoSucursal += `${datosSuc.encargado}\n`;
+            if (datosSuc.cedula) infoSucursal += `Céd.: ${datosSuc.cedula}\n`;
+            if (datosSuc.direccion) infoSucursal += `Dir.: ${datosSuc.direccion}\n`;
+            if (datosSuc.telefono) infoSucursal += `Tel.: ${datosSuc.telefono}\n`;
             if (datosSuc.correo) infoSucursal += `Correo: ${datosSuc.correo}`;
-            infoSucursal += `</div>`;
+
+            // Construir la tabla con formato de texto plano SIN líneas verticales
+            let tabla = "";
+            // Línea horizontal superior
+            tabla += "--------------------------------------------\n";
+            // Encabezado con espacios fijos
+            tabla += "MATERIAL             KG   PRECIO    TOTAL\n";
+            tabla += "--------------------------------------------\n";
+
+            fact.detalles_materiales.forEach(m => {
+                const material = m.material.padEnd(20).slice(0, 20);
+                const kilos = m.kilos.toString().padStart(6);
+                const precio = m.precio_unitario.toLocaleString('es-CR').padStart(8);
+                const total = m.total_pago.toLocaleString('es-CR').padStart(10);
+                tabla += `${material}${kilos}${precio}${total}\n`;
+            });
+
+            tabla += "--------------------------------------------\n";
+            const totalFactura = fact.total_factura.toLocaleString('es-CR');
+            tabla += `TOTAL: ₡${totalFactura.padStart(34)}\n`;
+            tabla += "--------------------------------------------\n";
+
+            // Espacio para firma (3 cm = aproximadamente 6 líneas en blanco)
+            let firma = "\n\n\n\n\n\n"; // 6 líneas en blanco
+            firma += "FIRMA DEL CLIENTE: _______________________\n";
+            firma += "(Acepto el contenido de esta factura)\n";
+            firma += "\n\n\n\n\n\n"; // más espacio al final
+
+            // Reemplazar saltos de línea con <br> para HTML
+            const infoSucursalHTML = infoSucursal.replace(/\n/g, '<br>');
+            const tablaHTML = tabla.replace(/\n/g, '<br>');
+            const firmaHTML = firma.replace(/\n/g, '<br>');
 
             const contenido = `
                 <html>
                 <head>
                     <title>Factura #${fact.num_factura}</title>
                     <style>
-                        /* RESET para impresión */
-                        * { margin: 0; padding: 0; box-sizing: border-box; }
                         body {
                             font-family: 'Courier New', Courier, monospace;
-                            font-size: 13px;
+                            font-size: 12px;
                             line-height: 1.5;
                             max-width: 80mm;
                             margin: 0 auto;
-                            padding: 3mm 4mm 18mm 4mm;  /* Aumentado el padding inferior a 18mm (casi 2 cm) */
+                            padding: 3mm 4mm 15mm 4mm;
                             background: white;
                             color: black;
                         }
                         .header {
                             text-align: center;
-                            border-bottom: 2px solid #000;
-                            padding-bottom: 4px;
-                            margin-bottom: 6px;
+                            font-weight: bold;
+                            margin-bottom: 8px;
                         }
                         .header h1 {
                             font-size: 16px;
-                            font-weight: bold;
                             margin: 2px 0;
                         }
                         .header h2 {
-                            font-size: 15px;
-                            font-weight: bold;
+                            font-size: 14px;
                             margin: 2px 0;
                         }
                         .datos-sucursal {
-                            font-size: 12px;
+                            font-size: 11px;
                             margin: 4px 0 8px 0;
                             padding: 4px;
                             border: 1px solid #000;
                             background: #f9f9f9;
-                            text-align: left;
+                            white-space: pre-wrap;
                         }
                         .info {
-                            margin-bottom: 8px;
-                            font-size: 13px;
+                            margin-bottom: 6px;
+                            font-size: 12px;
                         }
                         .info p {
                             margin: 2px 0;
                         }
-                        table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin: 6px 0;
-                            font-size: 12px;
-                        }
-                        th, td {
-                            border: 1px solid #000;
-                            padding: 4px 3px;
-                            text-align: left;
-                            vertical-align: top;
-                        }
-                        th {
-                            background: #ddd;
-                            font-weight: bold;
-                        }
-                        .total {
-                            font-size: 16px;
-                            font-weight: bold;
-                            text-align: right;
-                            margin-top: 6px;
-                            padding-top: 6px;
-                            border-top: 2px solid #000;
+                        .tabla {
+                            font-size: 11px;
+                            white-space: pre-wrap;
+                            font-family: 'Courier New', Courier, monospace;
                         }
                         .firma {
-                            margin-top: 20px;        /* Más espacio antes de la firma */
-                            padding-top: 10px;
-                            border-top: 1px dashed #000;
-                            text-align: center;
-                        }
-                        .firma .linea {
-                            display: inline-block;
-                            width: 70%;
-                            border-bottom: 2px solid #000;
-                            margin-top: 6px;          /* Más espacio entre el texto y la línea */
-                            margin-bottom: 4px;
-                        }
-                        .firma .label {
-                            font-weight: bold;
-                            font-size: 13px;
+                            margin-top: 20px;
+                            font-size: 12px;
+                            white-space: pre-wrap;
+                            font-family: 'Courier New', Courier, monospace;
                         }
                         .footer {
                             margin-top: 8px;
-                            font-size: 12px;
+                            font-size: 11px;
                             text-align: center;
                             border-top: 1px solid #000;
                             padding-top: 4px;
                         }
-                        /* Bloque extra para forzar papel adicional (2 cm) */
                         .extra-papel {
-                            height: 20mm;           /* 2 cm de altura extra */
-                            background: transparent;
-                            border: none;
+                            height: 40px;
                         }
-                        /* Asegurar bordes en impresión */
                         @media print {
-                            th, td { border: 1px solid #000 !important; }
                             .datos-sucursal { border: 1px solid #000 !important; }
+                            .footer { border-top: 1px solid #000 !important; }
                         }
                     </style>
                 </head>
@@ -799,9 +785,8 @@
                         <h1>FACTURA #${fact.num_factura} ${fact.serie ? '('+fact.serie+')' : ''}</h1>
                     </div>
 
-                    <!-- Datos de la sucursal -->
                     <div class="datos-sucursal">
-                        ${infoSucursal}
+                        ${infoSucursalHTML}
                     </div>
 
                     <div class="info">
@@ -810,32 +795,11 @@
                         <p><strong>Cédula:</strong> ${fact.cedula}</p>
                     </div>
 
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Material</th>
-                                <th>Kg</th>
-                                <th>₡/Kg</th>
-                                <th>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${detalles}
-                        </tbody>
-                    </table>
+                    <div class="tabla">${tablaHTML}</div>
 
-                    <div class="total">Total: ₡${fact.total_factura.toLocaleString('es-CR')}</div>
-                    
-                    <!-- Firma con más espacio -->
-                    <div class="firma">
-                        <div class="label">Firma del Cliente</div>
-                        <div class="linea">&nbsp;</div>
-                        <div style="font-size:11px; color:#555; margin-top:2px;">(Acepto el contenido de esta factura)</div>
-                    </div>
+                    <div class="firma">${firmaHTML}</div>
 
                     <div class="footer">Gracias por su visita</div>
-                    
-                    <!-- Bloque extra de 2 cm para que la impresora avance más papel -->
                     <div class="extra-papel"></div>
                 </body>
                 </html>
