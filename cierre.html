@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sisstema de Facturación y Cierre - Sucursal</title>
+    <title>Sistema de Facturación y Cierre - Sucursal</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -42,7 +42,7 @@
         const ID_SECUNDARIA = '1144'; 
         let temporizadorFirestore = null; 
 
-        // ---------- DATOS DE CADA SUCURSAL ----------
+        // Datos de cada sucursal
         const datosSucursales = {
             "Paraiso": {
                 nombre: "Grupo Ingeniería Verde",
@@ -698,7 +698,7 @@
                             line-height: 1.5;
                             max-width: 80mm;
                             margin: 0 auto;
-                            padding: 3mm 4mm 12mm 4mm;  /* padding inferior extra */
+                            padding: 3mm 4mm 18mm 4mm;  /* Aumentado el padding inferior a 18mm (casi 2 cm) */
                             background: white;
                             color: black;
                         }
@@ -758,8 +758,8 @@
                             border-top: 2px solid #000;
                         }
                         .firma {
-                            margin-top: 16px;
-                            padding-top: 8px;
+                            margin-top: 20px;        /* Más espacio antes de la firma */
+                            padding-top: 10px;
                             border-top: 1px dashed #000;
                             text-align: center;
                         }
@@ -767,8 +767,8 @@
                             display: inline-block;
                             width: 70%;
                             border-bottom: 2px solid #000;
-                            margin-top: 4px;
-                            margin-bottom: 2px;
+                            margin-top: 6px;          /* Más espacio entre el texto y la línea */
+                            margin-bottom: 4px;
                         }
                         .firma .label {
                             font-weight: bold;
@@ -781,9 +781,9 @@
                             border-top: 1px solid #000;
                             padding-top: 4px;
                         }
-                        /* Bloque extra para forzar papel adicional */
+                        /* Bloque extra para forzar papel adicional (2 cm) */
                         .extra-papel {
-                            height: 30px;
+                            height: 20mm;           /* 2 cm de altura extra */
                             background: transparent;
                             border: none;
                         }
@@ -826,7 +826,7 @@
 
                     <div class="total">Total: ₡${fact.total_factura.toLocaleString('es-CR')}</div>
                     
-                    <!-- Firma -->
+                    <!-- Firma con más espacio -->
                     <div class="firma">
                         <div class="label">Firma del Cliente</div>
                         <div class="linea">&nbsp;</div>
@@ -835,7 +835,7 @@
 
                     <div class="footer">Gracias por su visita</div>
                     
-                    <!-- Bloque extra para que la impresora avance -->
+                    <!-- Bloque extra de 2 cm para que la impresora avance más papel -->
                     <div class="extra-papel"></div>
                 </body>
                 </html>
