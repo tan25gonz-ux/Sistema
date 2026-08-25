@@ -42,7 +42,7 @@
         const ID_SECUNDARIA = '1144'; 
         let temporizadorFirestore = null; 
 
-        // ---------- DATOS DE CADA SUCURSAL ----------
+        // Datos de sucursales
         const datosSucursales = {
             "Paraiso": {
                 nombre: "Grupo Ingeniería Verde",
@@ -654,13 +654,15 @@
         };
 
         // =======================================================
-        // 🖨️ FUNCIÓN DE IMPRESIÓN PARA MATRICIAL (SIN LÍNEAS VERTICALES)
+        // 🖨️ FUNCIÓN DE IMPRESIÓN CON TEXTO PLANO Y FIRMA CON GUIONES
         // =======================================================
         window.imprimirFactura = (index) => {
             const fact = facturasDelDia[index];
             if (!fact) return;
 
             const fecha = document.getElementById('fecha').value || new Date().toLocaleDateString('es-CR');
+            
+            // Obtener datos de la sucursal
             const datosSuc = datosSucursales[sucursalActual] || {
                 nombre: sucursalActual,
                 encargado: "",
@@ -670,47 +672,65 @@
                 correo: ""
             };
 
-            // Construir el bloque de información de la sucursal
-            let infoSucursal = `${datosSuc.nombre}\n`;
-            if (datosSuc.encargado) infoSucursal += `${datosSuc.encargado}\n`;
-            if (datosSuc.cedula) infoSucursal += `Céd.: ${datosSuc.cedula}\n`;
-            if (datosSuc.direccion) infoSucursal += `Dir.: ${datosSuc.direccion}\n`;
-            if (datosSuc.telefono) infoSucursal += `Tel.: ${datosSuc.telefono}\n`;
-            if (datosSuc.correo) infoSucursal += `Correo: ${datosSuc.correo}`;
+            // Construir líneas de texto para el ticket
+            let lineas = [];
 
-            // Construir la tabla con formato de texto plano SIN líneas verticales
-            let tabla = "";
-            // Línea horizontal superior
-            tabla += "--------------------------------------------\n";
-            // Encabezado con espacios fijos
-            tabla += "MATERIAL             KG   PRECIO    TOTAL\n";
-            tabla += "--------------------------------------------\n";
+            // Encabezado - Sucursal
+            lineas.push(" ".repeat(10) + datosSuc.nombre);
+            if (datosSuc.encargado) lineas.push(" ".repeat(10) + datosSuc.encargado);
+            if (datosSuc.cedula) lineas.push(" ".repeat(10) + "Céd.: " + datosSuc.cedula);
+            if (datosSuc.direccion) lineas.push(" ".repeat(10) + "Dir.: " + datosSuc.direccion);
+            if (datosSuc.telefono) lineas.push(" ".repeat(10) + "Tel.: " + datosSuc.telefono);
+            if (datosSuc.correo) lineas.push(" ".repeat(10) + "Correo: " + datosSuc.correo);
+            lineas.push(""); // línea en blanco
 
+            // Factura #
+            lineas.push(" ".repeat(10) + "FACTURA #" + fact.num_factura + (fact.serie ? " (" + fact.serie + ")" : ""));
+            lineas.push(" ".repeat(10) + "Fecha: " + fecha);
+            lineas.push(" ".repeat(10) + "Cliente: " + fact.nombre);
+            lineas.push(" ".repeat(10) + "Cédula: " + fact.cedula);
+            lineas.push(""); // línea en blanco
+
+            // Encabezado de tabla (sin bordes verticales, solo guiones)
+            lineas.push("Material               Kg     ₡/Kg     Total");
+            lineas.push("------------------------------------------------------------");
+
+            // Detalle de materiales
             fact.detalles_materiales.forEach(m => {
-                const material = m.material.padEnd(20).slice(0, 20);
-                const kilos = m.kilos.toString().padStart(6);
-                const precio = m.precio_unitario.toLocaleString('es-CR').padStart(8);
-                const total = m.total_pago.toLocaleString('es-CR').padStart(10);
-                tabla += `${material}${kilos}${precio}${total}\n`;
+                // Formatear número con espacios en lugar de comas (para impresora matricial)
+                const kgStr = m.kilos.toFixed(1).padStart(6);
+                const precioStr = m.precio_unitario.toLocaleString('es-CR', { useGrouping: false }).padStart(8);
+                const totalStr = m.total_pago.toLocaleString('es-CR', { useGrouping: false }).padStart(10);
+                // Recortar nombre del material a 20 caracteres
+                const matNombre = m.material.substring(0, 20).padEnd(20);
+                lineas.push(matNombre + kgStr + "   " + precioStr + "   " + totalStr);
             });
 
-            tabla += "--------------------------------------------\n";
-            const totalFactura = fact.total_factura.toLocaleString('es-CR');
-            tabla += `TOTAL: ₡${totalFactura.padStart(34)}\n`;
-            tabla += "--------------------------------------------\n";
+            lineas.push("------------------------------------------------------------");
+            // Total
+            const totalFactura = fact.total_factura.toLocaleString('es-CR', { useGrouping: false });
+            lineas.push(" ".repeat(30) + "Total: ₡" + totalFactura.padStart(10));
+            lineas.push(""); // línea en blanco
 
-            // Espacio para firma (3 cm = aproximadamente 6 líneas en blanco)
-            let firma = "\n\n\n\n\n\n"; // 6 líneas en blanco
-            firma += "FIRMA DEL CLIENTE: _______________________\n";
-            firma += "(Acepto el contenido de esta factura)\n";
-            firma += "\n\n\n\n\n\n"; // más espacio al final
+            // FIRMA con 7 guiones
+            lineas.push(" ".repeat(10) + "Firma del Cliente");
+            for (let i = 0; i < 7; i++) {
+                lineas.push(" ".repeat(10) + "-".repeat(30));
+            }
+            lineas.push(" ".repeat(10) + "(Acepto el contenido de esta factura)");
+            lineas.push(""); // línea en blanco
+            lineas.push(" ".repeat(10) + "Gracias por su visita");
+            
+            // Agregar líneas extra para que la impresora avance más papel
+            for (let i = 0; i < 5; i++) {
+                lineas.push("");
+            }
 
-            // Reemplazar saltos de línea con <br> para HTML
-            const infoSucursalHTML = infoSucursal.replace(/\n/g, '<br>');
-            const tablaHTML = tabla.replace(/\n/g, '<br>');
-            const firmaHTML = firma.replace(/\n/g, '<br>');
+            // Convertir a texto plano con saltos de línea
+            const contenidoTexto = lineas.join("\n");
 
-            const contenido = `
+            // Crear un blob para imprimir con ventana emergente
+            const contenidoHTML = `
                 <html>
                 <head>
                     <title>Factura #${fact.num_factura}</title>
@@ -718,96 +738,30 @@
                         body {
                             font-family: 'Courier New', Courier, monospace;
                             font-size: 12px;
-                            line-height: 1.5;
-                            max-width: 80mm;
-                            margin: 0 auto;
-                            padding: 3mm 4mm 15mm 4mm;
+                            white-space: pre;
+                            margin: 0;
+                            padding: 8mm 5mm 15mm 5mm; /* padding inferior extra */
                             background: white;
                             color: black;
+                            max-width: 80mm;
                         }
-                        .header {
-                            text-align: center;
-                            font-weight: bold;
-                            margin-bottom: 8px;
-                        }
-                        .header h1 {
-                            font-size: 16px;
-                            margin: 2px 0;
-                        }
-                        .header h2 {
-                            font-size: 14px;
-                            margin: 2px 0;
-                        }
-                        .datos-sucursal {
-                            font-size: 11px;
-                            margin: 4px 0 8px 0;
-                            padding: 4px;
-                            border: 1px solid #000;
-                            background: #f9f9f9;
-                            white-space: pre-wrap;
-                        }
-                        .info {
-                            margin-bottom: 6px;
-                            font-size: 12px;
-                        }
-                        .info p {
-                            margin: 2px 0;
-                        }
-                        .tabla {
-                            font-size: 11px;
-                            white-space: pre-wrap;
-                            font-family: 'Courier New', Courier, monospace;
-                        }
-                        .firma {
-                            margin-top: 20px;
-                            font-size: 12px;
-                            white-space: pre-wrap;
-                            font-family: 'Courier New', Courier, monospace;
-                        }
-                        .footer {
-                            margin-top: 8px;
-                            font-size: 11px;
-                            text-align: center;
-                            border-top: 1px solid #000;
-                            padding-top: 4px;
-                        }
-                        .extra-papel {
-                            height: 40px;
-                        }
+                        /* Asegurar que el contenido se muestre en una sola fuente */
+                        * { font-family: 'Courier New', Courier, monospace; }
+                        /* Ocultar elementos no deseados */
                         @media print {
-                            .datos-sucursal { border: 1px solid #000 !important; }
-                            .footer { border-top: 1px solid #000 !important; }
+                            body { margin: 0; padding: 0; }
                         }
                     </style>
                 </head>
                 <body>
-                    <div class="header">
-                        <h1>FACTURA #${fact.num_factura} ${fact.serie ? '('+fact.serie+')' : ''}</h1>
-                    </div>
-
-                    <div class="datos-sucursal">
-                        ${infoSucursalHTML}
-                    </div>
-
-                    <div class="info">
-                        <p><strong>Fecha:</strong> ${fecha}</p>
-                        <p><strong>Cliente:</strong> ${fact.nombre}</p>
-                        <p><strong>Cédula:</strong> ${fact.cedula}</p>
-                    </div>
-
-                    <div class="tabla">${tablaHTML}</div>
-
-                    <div class="firma">${firmaHTML}</div>
-
-                    <div class="footer">Gracias por su visita</div>
-                    <div class="extra-papel"></div>
+                    <pre>${contenidoTexto}</pre>
                 </body>
                 </html>
             `;
 
             const ventana = window.open('', '_blank', 'width=800,height=600');
             if (ventana) {
-                ventana.document.write(contenido);
+                ventana.document.write(contenidoHTML);
                 ventana.document.close();
                 ventana.focus();
                 setTimeout(() => ventana.print(), 600);
