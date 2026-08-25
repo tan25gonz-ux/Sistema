@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Facturación y Cierre - Sucursal</title>
+    <title>Siasstema de Facturación y Cierre - Sucursal</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -640,16 +640,28 @@
                 <html>
                 <head><title>Factura #${fact.num_factura} ${fact.serie || ''}</title>
                 <style>
-                    @page { margin: 5mm; size: 80mm auto; }
-                    body { font-family: Arial, sans-serif; font-size: 12px; max-width: 72mm; margin: 0 auto; padding: 0; }
-                    h2 { text-align: center; font-size: 14px; margin: 5px 0; }
-                    .info { font-size: 11px; margin-bottom: 10px; }
+                    @page { 
+                        margin: 2mm; 
+                        size: 80mm auto; 
+                        @top-center { content: none; }
+                        @bottom-center { content: none; }
+                    }
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        font-size: 13px; 
+                        max-width: 100%; 
+                        margin: 0 auto; 
+                        padding: 4px 6px; 
+                        box-sizing: border-box;
+                    }
+                    h2 { text-align: center; font-size: 15px; margin: 5px 0; }
+                    .info { font-size: 12px; margin-bottom: 10px; }
                     .info p { margin: 2px 0; }
-                    table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 11px; }
+                    table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
                     th { background: #eee; text-align: left; padding: 4px; border-bottom: 1px solid #999; }
                     td { padding: 4px; border-bottom: 1px solid #ddd; }
-                    .total { font-weight: bold; font-size: 13px; text-align: right; margin-top: 10px; border-top: 2px solid #333; padding-top: 5px; }
-                    .footer { margin-top: 15px; font-size: 10px; color: #555; text-align: center; }
+                    .total { font-weight: bold; font-size: 14px; text-align: right; margin-top: 10px; border-top: 2px solid #333; padding-top: 5px; }
+                    .footer { margin-top: 15px; font-size: 11px; color: #555; text-align: center; }
                 </style>
                 </head>
                 <body>
@@ -900,7 +912,6 @@
                     </div>
                     <div>
                         <label># Número de Factura</label>
-                        <!-- ✅ CAMBIO: Quitado el atributo "readonly", ahora es editable -->
                         <input type="text" id="numFacturaCliente" placeholder="Automático" style="border: 1px solid #2b6cb0; font-weight: bold; background: #fff;">
                     </div>
                 </div>
