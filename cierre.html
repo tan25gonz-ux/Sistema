@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Facturación y Cierre - Sucursal</title>
+    <title>Sisstema de Facturación y Cierre - Sucursal</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -627,9 +627,9 @@
             actualizarTablaGeneralDia();
         };
 
-        // =======================================================
-        // 🖨️ FUNCIÓN DE IMPRESIÓN MODIFICADA - Tamaño grande, firma y más papel
-        // =======================================================
+        // ============================================================
+        // 🖨️ FUNCIÓN DE IMPRESIÓN PARA TM-U220PA (MATRIZ DE PUNTOS)
+        // ============================================================
         window.imprimirFactura = (index) => {
             const fact = facturasDelDia[index];
             if (!fact) return;
@@ -642,106 +642,100 @@
             const contenido = `
                 <html>
                 <head>
-                    <title>Factura #${fact.num_factura} ${fact.serie || ''}</title>
+                    <title>Factura #${fact.num_factura}</title>
                     <style>
-                        /* 🔥 Tamaño de página forzado a 80mm de ancho y alto automático */
-                        @page {
-                            size: 80mm auto;
-                            margin: 3mm 4mm;
-                            @top-center { content: none; }
-                            @bottom-center { content: none; }
-                        }
+                        /* Reset y configuración para papel continuo 80mm */
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
                         body {
-                            font-family: 'Segoe UI', Arial, sans-serif;
-                            font-size: 15px;           /* Fuente más grande */
-                            max-width: 100%;
+                            font-family: 'Courier New', Courier, monospace;
+                            font-size: 14px;
+                            line-height: 1.5;
+                            max-width: 80mm;           /* Ancho máximo 80mm */
                             margin: 0 auto;
-                            padding: 4px 4px 40px 4px;  /* Padding inferior grande (40px) para que la impresora alimente más papel */
-                            box-sizing: border-box;
+                            padding: 3mm 4mm 18mm 4mm;  /* Padding inferior grande (18mm) para forzar avance */
                             background: white;
-                            color: #1a1a1a;
+                            color: black;
                         }
                         .header {
                             text-align: center;
-                            border-bottom: 2px solid #222;
-                            padding-bottom: 6px;
+                            border-bottom: 3px solid #000;  /* Borde más grueso */
+                            padding-bottom: 4px;
                             margin-bottom: 8px;
                         }
                         .header h1 {
-                            font-size: 20px;
-                            margin: 4px 0 2px 0;
-                            font-weight: 800;
+                            font-size: 18px;
+                            font-weight: bold;
+                            margin: 0;
                         }
                         .header h2 {
-                            font-size: 18px;
-                            margin: 2px 0 4px 0;
-                            font-weight: 700;
+                            font-size: 16px;
+                            font-weight: bold;
+                            margin: 2px 0;
                         }
                         .info {
-                            font-size: 14px;
                             margin-bottom: 10px;
-                            line-height: 1.5;
+                            font-size: 13px;
                         }
                         .info p {
-                            margin: 3px 0;
-                        }
-                        .info strong {
-                            font-weight: 700;
+                            margin: 2px 0;
                         }
                         table {
                             width: 100%;
                             border-collapse: collapse;
-                            margin: 10px 0;
-                            font-size: 14px;
+                            margin: 8px 0;
+                            font-size: 13px;
+                        }
+                        th, td {
+                            border: 2px solid #000;      /* Borde grueso (2px) para que se vea en matriz de puntos */
+                            padding: 5px 4px;
+                            text-align: left;
+                            vertical-align: top;
                         }
                         th {
-                            background: #e9ecef;
-                            text-align: left;
-                            padding: 5px 4px;
-                            border-bottom: 2px solid #333;
-                            font-weight: 700;
-                        }
-                        td {
-                            padding: 5px 4px;
-                            border-bottom: 1px solid #ccc;
+                            background: #eee;
+                            font-weight: bold;
                         }
                         .total {
                             font-size: 18px;
-                            font-weight: 800;
+                            font-weight: bold;
                             text-align: right;
                             margin-top: 8px;
                             padding-top: 8px;
-                            border-top: 2px solid #222;
+                            border-top: 3px solid #000;
                         }
                         .firma {
-                            margin-top: 25px;
-                            border-top: 1px dashed #999;
-                            padding-top: 12px;
+                            margin-top: 20px;
+                            padding-top: 10px;
+                            border-top: 2px dashed #000;
                             text-align: center;
-                            font-size: 14px;
                         }
                         .firma .linea {
                             display: inline-block;
                             width: 70%;
-                            border-bottom: 1px solid #222;
+                            border-bottom: 2px solid #000;
                             margin-top: 6px;
-                            margin-bottom: 2px;
+                            margin-bottom: 4px;
                         }
                         .firma .label {
-                            font-weight: 600;
-                            color: #333;
+                            font-weight: bold;
+                            font-size: 14px;
                         }
                         .footer {
-                            margin-top: 12px;
-                            font-size: 13px;
-                            color: #555;
+                            margin-top: 10px;
+                            font-size: 12px;
                             text-align: center;
-                            border-top: 1px solid #ccc;
-                            padding-top: 8px;
+                            border-top: 2px solid #000;
+                            padding-top: 6px;
                         }
-                        /* Pequeño ajuste para que el espacio de firma no se corte */
-                        .espacio-final {
-                            height: 15px;
+                        /* Bloque extra para forzar avance de papel */
+                        .extra-papel {
+                            height: 45px;
+                            background: transparent;
+                            border: none;
+                        }
+                        /* Asegurar que los bordes se impriman en matriz de puntos */
+                        @media print {
+                            th, td { border: 2px solid #000 !important; }
                         }
                     </style>
                 </head>
@@ -756,20 +750,31 @@
                         <p><strong>Cédula:</strong> ${fact.cedula}</p>
                     </div>
                     <table>
-                        <thead><tr><th>Material</th><th>Kg</th><th>₡/Kg</th><th>Total</th></tr></thead>
-                        <tbody>${detalles}</tbody>
+                        <thead>
+                            <tr>
+                                <th>Material</th>
+                                <th>Kg</th>
+                                <th>₡/Kg</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${detalles}
+                        </tbody>
                     </table>
                     <div class="total">Total: ₡${fact.total_factura.toLocaleString('es-CR')}</div>
                     
-                    <!-- ✍️ Espacio para firma del cliente -->
+                    <!-- Firma del cliente -->
                     <div class="firma">
                         <div class="label">Firma del Cliente</div>
                         <div class="linea">&nbsp;</div>
-                        <div style="font-size:12px; color:#888; margin-top:2px;">(Acepto el contenido de esta factura)</div>
+                        <div style="font-size:11px; color:#555; margin-top:2px;">(Acepto el contenido de esta factura)</div>
                     </div>
 
                     <div class="footer">Gracias por su visita</div>
-                    <div class="espacio-final"></div> <!-- Para asegurar más papel al final -->
+                    
+                    <!-- Bloque que fuerza avance de papel en impresoras de matriz de puntos -->
+                    <div class="extra-papel"></div>
                 </body>
                 </html>
             `;
@@ -779,7 +784,7 @@
                 ventana.document.write(contenido);
                 ventana.document.close();
                 ventana.focus();
-                setTimeout(() => ventana.print(), 500);
+                setTimeout(() => ventana.print(), 600);
             } else {
                 alert('Por favor, permita ventanas emergentes para imprimir.');
             }
