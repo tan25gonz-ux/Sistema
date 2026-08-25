@@ -40,9 +40,9 @@
 
         let secuenciaActiva = ''; 
         const ID_SECUNDARIA = '1144'; 
-        let temporizadorFirestore = null; 
+        let temporizadorFirestore = null;
 
-        // Datos de sucursales
+        // ---------- DATOS DE CADA SUCURSAL ----------
         const datosSucursales = {
             "Paraiso": {
                 nombre: "Grupo Ingeniería Verde",
@@ -654,7 +654,7 @@
         };
 
         // =======================================================
-        // 🖨️ FUNCIÓN DE IMPRESIÓN CON TEXTO PLANO Y FIRMA CON GUIONES
+        // 🖨️ FUNCIÓN DE IMPRESIÓN - TODO A LA IZQUIERDA, SIN LÍNEAS VERTICALES, FIRMA CON GUIONES
         // =======================================================
         window.imprimirFactura = (index) => {
             const fact = facturasDelDia[index];
@@ -672,96 +672,167 @@
                 correo: ""
             };
 
-            // Construir líneas de texto para el ticket
-            let lineas = [];
+            // Construir líneas de información de la sucursal
+            let linesSuc = [];
+            if (datosSuc.nombre) linesSuc.push(datosSuc.nombre);
+            if (datosSuc.encargado) linesSuc.push(datosSuc.encargado);
+            if (datosSuc.cedula) linesSuc.push("Céd.: " + datosSuc.cedula);
+            if (datosSuc.direccion) linesSuc.push("Dir.: " + datosSuc.direccion);
+            if (datosSuc.telefono) linesSuc.push("Tel.: " + datosSuc.telefono);
+            if (datosSuc.correo) linesSuc.push("Correo: " + datosSuc.correo);
+            const sucHtml = linesSuc.map(line => `<div>${line}</div>`).join('');
 
-            // Encabezado - Sucursal
-            lineas.push(" ".repeat(10) + datosSuc.nombre);
-            if (datosSuc.encargado) lineas.push(" ".repeat(10) + datosSuc.encargado);
-            if (datosSuc.cedula) lineas.push(" ".repeat(10) + "Céd.: " + datosSuc.cedula);
-            if (datosSuc.direccion) lineas.push(" ".repeat(10) + "Dir.: " + datosSuc.direccion);
-            if (datosSuc.telefono) lineas.push(" ".repeat(10) + "Tel.: " + datosSuc.telefono);
-            if (datosSuc.correo) lineas.push(" ".repeat(10) + "Correo: " + datosSuc.correo);
-            lineas.push(""); // línea en blanco
-
-            // Factura #
-            lineas.push(" ".repeat(10) + "FACTURA #" + fact.num_factura + (fact.serie ? " (" + fact.serie + ")" : ""));
-            lineas.push(" ".repeat(10) + "Fecha: " + fecha);
-            lineas.push(" ".repeat(10) + "Cliente: " + fact.nombre);
-            lineas.push(" ".repeat(10) + "Cédula: " + fact.cedula);
-            lineas.push(""); // línea en blanco
-
-            // Encabezado de tabla (sin bordes verticales, solo guiones)
-            lineas.push("Material               Kg     ₡/Kg     Total");
-            lineas.push("------------------------------------------------------------");
-
-            // Detalle de materiales
+            // Generar filas de materiales sin bordes, con espacio entre columnas
+            let materialesHtml = '';
             fact.detalles_materiales.forEach(m => {
-                // Formatear número con espacios en lugar de comas (para impresora matricial)
-                const kgStr = m.kilos.toFixed(1).padStart(6);
-                const precioStr = m.precio_unitario.toLocaleString('es-CR', { useGrouping: false }).padStart(8);
-                const totalStr = m.total_pago.toLocaleString('es-CR', { useGrouping: false }).padStart(10);
-                // Recortar nombre del material a 20 caracteres
-                const matNombre = m.material.substring(0, 20).padEnd(20);
-                lineas.push(matNombre + kgStr + "   " + precioStr + "   " + totalStr);
+                // Formatear: nombre, kilos, precio unitario, total
+                // Usamos un ancho fijo aproximado con espacios (en impresoras matriciales se ve bien con fuente monoespaciada)
+                const nombre = m.material.padEnd(20, ' ');
+                const kilos = m.kilos.toFixed(1).padStart(8, ' ');
+                const precio = m.precio_unitario.toLocaleString('es-CR').padStart(8, ' ');
+                const total = m.total_pago.toLocaleString('es-CR').padStart(10, ' ');
+                materialesHtml += `<div style="font-family: 'Courier New', monospace; white-space: pre;">${nombre} ${kilos} ${precio} ${total}</div>`;
             });
 
-            lineas.push("------------------------------------------------------------");
-            // Total
-            const totalFactura = fact.total_factura.toLocaleString('es-CR', { useGrouping: false });
-            lineas.push(" ".repeat(30) + "Total: ₡" + totalFactura.padStart(10));
-            lineas.push(""); // línea en blanco
+            // Firma con 7 guiones en líneas separadas
+            const firmaGuiones = Array(7).fill('-').map(() => `<div>-</div>`).join('');
 
-            // FIRMA con 7 guiones
-            lineas.push(" ".repeat(10) + "Firma del Cliente");
-            for (let i = 0; i < 7; i++) {
-                lineas.push(" ".repeat(10) + "-".repeat(30));
-            }
-            lineas.push(" ".repeat(10) + "(Acepto el contenido de esta factura)");
-            lineas.push(""); // línea en blanco
-            lineas.push(" ".repeat(10) + "Gracias por su visita");
-            
-            // Agregar líneas extra para que la impresora avance más papel
-            for (let i = 0; i < 5; i++) {
-                lineas.push("");
-            }
-
-            // Convertir a texto plano con saltos de línea
-            const contenidoTexto = lineas.join("\n");
-
-            // Crear un blob para imprimir con ventana emergente
-            const contenidoHTML = `
+            const contenido = `
                 <html>
                 <head>
                     <title>Factura #${fact.num_factura}</title>
                     <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
                         body {
                             font-family: 'Courier New', Courier, monospace;
-                            font-size: 12px;
-                            white-space: pre;
-                            margin: 0;
-                            padding: 8mm 5mm 15mm 5mm; /* padding inferior extra */
+                            font-size: 13px;
+                            line-height: 1.5;
+                            max-width: 80mm;
+                            margin: 0 auto;
+                            padding: 3mm 4mm 25mm 4mm;  /* padding inferior grande (25mm) para más papel */
                             background: white;
                             color: black;
-                            max-width: 80mm;
                         }
-                        /* Asegurar que el contenido se muestre en una sola fuente */
-                        * { font-family: 'Courier New', Courier, monospace; }
-                        /* Ocultar elementos no deseados */
+                        .header {
+                            margin-bottom: 6px;
+                            border-bottom: 1px solid #000;
+                            padding-bottom: 4px;
+                        }
+                        .header div {
+                            text-align: left;
+                        }
+                        .header .factura-titulo {
+                            font-size: 16px;
+                            font-weight: bold;
+                        }
+                        .info {
+                            margin: 8px 0;
+                        }
+                        .info div {
+                            margin: 2px 0;
+                        }
+                        .materiales {
+                            margin: 8px 0;
+                            border-top: 1px solid #000;
+                            border-bottom: 1px solid #000;
+                            padding: 4px 0;
+                        }
+                        .materiales .cabecera {
+                            font-weight: bold;
+                            border-bottom: 1px solid #000;
+                            padding-bottom: 2px;
+                            margin-bottom: 4px;
+                        }
+                        .materiales .fila {
+                            font-family: 'Courier New', monospace;
+                            white-space: pre;
+                        }
+                        .total {
+                            font-size: 15px;
+                            font-weight: bold;
+                            margin-top: 6px;
+                            text-align: left;
+                        }
+                        .firma {
+                            margin-top: 16px;
+                            padding-top: 8px;
+                            border-top: 1px dashed #000;
+                        }
+                        .firma .label {
+                            font-weight: bold;
+                            font-size: 13px;
+                        }
+                        .firma .guiones {
+                            margin-top: 4px;
+                            font-size: 13px;
+                            line-height: 1.8;
+                        }
+                        .firma .guiones div {
+                            margin: 0;
+                        }
+                        .firma .acepto {
+                            font-size: 12px;
+                            color: #555;
+                            margin-top: 4px;
+                        }
+                        .footer {
+                            margin-top: 10px;
+                            font-size: 12px;
+                            text-align: left;
+                            border-top: 1px solid #000;
+                            padding-top: 4px;
+                        }
+                        .extra-papel {
+                            height: 30px;
+                            background: transparent;
+                            border: none;
+                        }
                         @media print {
-                            body { margin: 0; padding: 0; }
+                            .header { border-bottom: 1px solid #000 !important; }
+                            .materiales { border-top: 1px solid #000 !important; border-bottom: 1px solid #000 !important; }
+                            .materiales .cabecera { border-bottom: 1px solid #000 !important; }
+                            .total { border-top: none; }
+                            .firma { border-top: 1px dashed #000 !important; }
+                            .footer { border-top: 1px solid #000 !important; }
                         }
                     </style>
                 </head>
                 <body>
-                    <pre>${contenidoTexto}</pre>
+                    <div class="header">
+                        <div>${sucHtml}</div>
+                        <div class="factura-titulo">FACTURA #${fact.num_factura} ${fact.serie ? '('+fact.serie+')' : ''}</div>
+                    </div>
+
+                    <div class="info">
+                        <div><strong>Fecha:</strong> ${fecha}</div>
+                        <div><strong>Cliente:</strong> ${fact.nombre}</div>
+                        <div><strong>Cédula:</strong> ${fact.cedula}</div>
+                    </div>
+
+                    <div class="materiales">
+                        <div class="cabecera">Material               Kg    ₡/Kg     Total</div>
+                        ${materialesHtml}
+                    </div>
+
+                    <div class="total">Total: ₡${fact.total_factura.toLocaleString('es-CR')}</div>
+
+                    <div class="firma">
+                        <div class="label">Firma del Cliente</div>
+                        <div class="guiones">
+                            ${firmaGuiones}
+                        </div>
+                        <div class="acepto">(Acepto el contenido de esta factura)</div>
+                    </div>
+
+                    <div class="footer">Gracias por su visita</div>
+                    <div class="extra-papel"></div>
                 </body>
                 </html>
             `;
 
             const ventana = window.open('', '_blank', 'width=800,height=600');
             if (ventana) {
-                ventana.document.write(contenidoHTML);
+                ventana.document.write(contenido);
                 ventana.document.close();
                 ventana.focus();
                 setTimeout(() => ventana.print(), 600);
