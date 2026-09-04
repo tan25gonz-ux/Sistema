@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>S istema de Facturación y Cierre - Sucursal</title>
+    <title>Sistema de Facturación y Cierre - Sucursal</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -22,25 +22,28 @@
         const auth = getAuth(app);
 
         const listaMaterialesBase = [
-            "ACERO INOXIDABLE", "ALUMINIO", "BATERIA CARRO", "BRONCE", "CARTON", 
-            "CATALIZADOR", "CHATARRA", "COBRE", "GALONES", "PET", "TETRABRIK", 
-            "TARJETA", "LAVADORAS", "MOTORES", "LATAS ALUMINIO", "PAPEL REVUELTO", 
-            "PAPEL BLANCO", "PAPEL COLOR", "PERIODICO", "RADIADOR Cobre Bronce", 
-            "RADIADOR Cobre Aluminio", "RADIADOR ALUMINIO", "CAJA PLASTICA", 
+            "ACERO INOXIDABLE", "ALUMINIO", "BATERIA CARRO", "BRONCE", "CARTON",
+            "CATALIZADOR", "CHATARRA", "COBRE", "GALONES", "PET", "TETRABRIK",
+            "TARJETA", "LAVADORAS", "MOTORES", "LATAS ALUMINIO", "PAPEL REVUELTO",
+            "PAPEL BLANCO", "PAPEL COLOR", "PERIODICO", "RADIADOR Cobre Bronce",
+            "RADIADOR Cobre Aluminio", "RADIADOR ALUMINIO", "CAJA PLASTICA",
             "BOLSA TRANSPAR.", "BOLSA COLOR", "VIDRIO", "CABLE ELECTRICO", "OTROS"
         ];
 
         let preciosTrabajador = {};
-        let facturasDelDia = []; 
-        let listaGastosDia = []; 
-        let listaDepositosDia = []; 
+        let facturasDelDia = [];
+        let listaGastosDia = [];
+        let listaDepositosDia = [];
         let uidTrabajador = null;
         let totalAcumuladoComprasDia = 0;
         let sucursalActual = "Desconocida";
 
-        let secuenciaActiva = ''; 
-        const ID_SECUNDARIA = '1144'; 
+        let secuenciaActiva = '';
+        const ID_SECUNDARIA = '1144';
         let temporizadorFirestore = null;
+
+        // Variable para almacenar los datos del último cierre
+        let ultimoCierreData = null;
 
         // ---------- DATOS DE CADA SUCURSAL ----------
         const datosSucursales = {
@@ -75,7 +78,7 @@
 
                 if (emailUsuario.includes("perez")) {
                     sucursalActual = "Perez";
-                } else if (emailUsuario.includes("paraiso")) { 
+                } else if (emailUsuario.includes("paraiso")) {
                     sucursalActual = "Paraiso";
                 } else if (emailUsuario.includes("cartago")) {
                     sucursalActual = "Cartago";
@@ -86,7 +89,7 @@
                 document.getElementById('login-section').style.display = 'none';
                 document.getElementById('modulo-principal').style.display = 'grid';
                 document.getElementById('sucursal-txt').innerText = sucursalActual;
-                
+
                 const facturasGuardadas = localStorage.getItem(`facturas_${sucursalActual}`);
                 if (facturasGuardadas) facturasDelDia = JSON.parse(facturasGuardadas);
 
@@ -102,11 +105,11 @@
                 await cargarPreciosDesdeFirebase();
                 await calcularDeudaTotal();
                 await cargarUltimoCierre();
-                
+
                 await cargarNumerosSecuencias();
                 await cambiarSecuencia('default');
 
-                actualizarTablaGeneralDia(); 
+                actualizarTablaGeneralDia();
                 actualizarTablaGastos();
                 actualizarTablaDepositos();
             } else {
@@ -134,10 +137,10 @@
 
         window.cambiarSecuencia = async function(tipo) {
             secuenciaActiva = (tipo === 'default') ? '' : ID_SECUNDARIA;
-            
+
             const boxDefault = document.getElementById('seq-default-box');
             const boxSec = document.getElementById('seq-secundaria-box');
-            
+
             if (secuenciaActiva === '') {
                 boxDefault.className = 'seq-box seq-active';
                 boxDefault.querySelector('.seq-status').innerText = '🔵 Activo';
@@ -179,22 +182,45 @@
                 );
                 const snap = await getDocs(q);
                 if (!snap.empty) {
-                    const datos = snap.docs[0].data();
-                    const inicio = parseFloat(datos.caja_inicio) || 0;
-                    const cierre = parseFloat(datos.cierre_mano) || 0;
+                    const docData = snap.docs[0].data();
+                    // Guardamos todos los datos para el botón
+                    ultimoCierreData = docData;
+                    const inicio = parseFloat(docData.caja_inicio) || 0;
+                    const cierre = parseFloat(docData.cierre_mano) || 0;
 
                     document.getElementById('infoUltimoCierre').innerHTML = `
                         <b>📥 Dinero Base Inicial:</b> ₡${inicio.toLocaleString('es-CR')} | 
                         <b>📤 Disponible al Cierre:</b> ₡${cierre.toLocaleString('es-CR')} 
-                        <small style="color:#718096;">(${datos.fecha || ''})</small>
+                        <small style="color:#718096;">(${docData.fecha || ''})</small>
                     `;
                 } else {
+                    ultimoCierreData = null;
                     document.getElementById('infoUltimoCierre').innerText = "No se encontraron cierres previos registrados.";
                 }
             } catch (error) {
                 console.error("Error consultando último cierre: ", error);
             }
         }
+
+        // Función simple para mostrar el último cierre en un alert
+        window.mostrarUltimoCierre = function() {
+            if (!ultimoCierreData) {
+                alert('No hay un cierre previo registrado para esta sucursal.');
+                return;
+            }
+            const datos = ultimoCierreData;
+            alert(
+                `📋 ÚLTIMO CIERRE\n\n` +
+                `Fecha: ${datos.fecha || 'N/A'}\n` +
+                `Caja Inicio: ₡${(datos.caja_inicio || 0).toLocaleString('es-CR')}\n` +
+                `Ventas del día: ₡${(datos.total_ventas || 0).toLocaleString('es-CR')}\n` +
+                `Depósitos/Entradas: ₡${(datos.total_depositos || 0).toLocaleString('es-CR')}\n` +
+                `Pago de materiales: ₡${(datos.pago_materiales || 0).toLocaleString('es-CR')}\n` +
+                `Gastos varios: ₡${(datos.gastos_facturas || 0).toLocaleString('es-CR')}\n` +
+                `Cierre en mano: ₡${(datos.cierre_mano || 0).toLocaleString('es-CR')}\n` +
+                `Estado: ${datos.estado || 'Pendiente'}`
+            );
+        };
 
         async function cargarPreciosDesdeFirebase() {
             const pDoc = await getDoc(doc(db, "config_precios", uidTrabajador));
@@ -252,15 +278,15 @@
             try {
                 const q = query(collection(db, "movimientos_cuenta"), where("sucursal", "==", sucursalActual));
                 const querySnapshot = await getDocs(q);
-                
+
                 let deudaCalculada = 0;
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
                     const monto = parseFloat(data.monto) || 0;
-                    if (data.tipo === "Salida_Venta") deudaCalculada += monto; 
-                    else if (data.tipo === "Deposito") deudaCalculada -= monto; 
+                    if (data.tipo === "Salida_Venta") deudaCalculada += monto;
+                    else if (data.tipo === "Deposito") deudaCalculada -= monto;
                 });
-                
+
                 document.getElementById('deudaTotalTxt').innerText = deudaCalculada.toLocaleString('es-CR');
             } catch (error) {
                 console.error("Error calculando la deuda: ", error);
@@ -341,18 +367,18 @@
 
                 if (docSnap.exists()) {
                     document.getElementById('nombreCliente').value = docSnap.data().nombre;
-                    document.getElementById('nombreCliente').readOnly = true; 
+                    document.getElementById('nombreCliente').readOnly = true;
                 } else {
                     alert("ℹ️ Cliente nuevo. Por favor, digite el nombre completo manualmente.");
                     document.getElementById('nombreCliente').value = "";
                     document.getElementById('nombreCliente').readOnly = false;
                     document.getElementById('nombreCliente').focus();
                 }
-            } catch (error) { 
-                alert("Error al buscar en la base de datos."); 
-            } finally { 
-                btn.innerText = "🔎"; 
-                btn.disabled = false; 
+            } catch (error) {
+                alert("Error al buscar en la base de datos.");
+            } finally {
+                btn.innerText = "🔎";
+                btn.disabled = false;
             }
         };
 
@@ -567,7 +593,7 @@
             const inicioBase = obtenerNumeroLimpio('cajaInicioBase');
             const ventas = obtenerNumeroLimpio('ventas');
             const depositosPlata = obtenerTotalDepositos();
-            const pagoFacturas = totalAcumuladoComprasDia; 
+            const pagoFacturas = totalAcumuladoComprasDia;
             const gastosFact = obtenerTotalGastos();
 
             const disponibleCaja = (inicioBase + depositosPlata + ventas) - (pagoFacturas + gastosFact);
@@ -660,7 +686,6 @@
             const fact = facturasDelDia[index];
             if (!fact) return;
 
-            // Función para limpiar tildes y cambiar el símbolo de colones
             const normalizar = (texto) => {
                 if (typeof texto !== 'string') texto = String(texto);
                 return texto
@@ -671,7 +696,6 @@
 
             const fecha = document.getElementById('fecha').value || new Date().toLocaleDateString('es-CR');
             
-            // Datos de la sucursal
             const datosSuc = datosSucursales[sucursalActual] || {
                 nombre: sucursalActual,
                 encargado: "",
@@ -681,7 +705,6 @@
                 correo: ""
             };
 
-            // Construir líneas de información de la sucursal (normalizadas)
             let linesSuc = [];
             if (datosSuc.nombre) linesSuc.push(normalizar(datosSuc.nombre));
             if (datosSuc.encargado) linesSuc.push(normalizar(datosSuc.encargado));
@@ -691,10 +714,8 @@
             if (datosSuc.correo) linesSuc.push("Correo: " + normalizar(datosSuc.correo));
             const sucHtml = linesSuc.map(line => `<div>${line}</div>`).join('');
 
-            // Generar filas de materiales sin bordes, con espacio entre columnas
             let materialesHtml = '';
             fact.detalles_materiales.forEach(m => {
-                // Normalizar nombre del material (por si tiene acentos)
                 const nombre = normalizar(m.material).padEnd(20, ' ');
                 const kilos = m.kilos.toFixed(1).padStart(8, ' ');
                 const precio = m.precio_unitario.toLocaleString('es-CR').padStart(8, ' ');
@@ -702,7 +723,6 @@
                 materialesHtml += `<div style="font-family: 'Courier New', monospace; white-space: pre;">${nombre} ${kilos} ${precio} ${total}</div>`;
             });
 
-            // Firma con 7 guiones en líneas separadas
             const firmaGuiones = Array(7).fill('-').map(() => `<div>-</div>`).join('');
 
             const contenido = `
@@ -717,7 +737,7 @@
                             line-height: 1.5;
                             max-width: 80mm;
                             margin: 0 auto;
-                            padding: 3mm 4mm 25mm 4mm;  /* padding inferior grande (25mm) para más papel */
+                            padding: 3mm 4mm 25mm 4mm;
                             background: white;
                             color: black;
                         }
@@ -750,10 +770,6 @@
                             border-bottom: 1px solid #000;
                             padding-bottom: 2px;
                             margin-bottom: 4px;
-                        }
-                        .materiales .fila {
-                            font-family: 'Courier New', monospace;
-                            white-space: pre;
                         }
                         .total {
                             font-size: 15px;
@@ -864,7 +880,7 @@
             try {
                 const batch = writeBatch(db);
 
-                const cierreRef = doc(collection(db, "revisiones_faltantes")); 
+                const cierreRef = doc(collection(db, "revisiones_faltantes"));
                 batch.set(cierreRef, {
                     uid_trabajador: uidTrabajador, sucursal: sucursalActual, fecha,
                     caja_inicio: obtenerNumeroLimpio('cajaInicioBase'),
@@ -921,8 +937,8 @@
             try {
                 await addDoc(collection(db, "movimientos_cuenta"), {
                     uid_trabajador: uidTrabajador,
-                    sucursal: sucursalActual, 
-                    tipo: tipo, 
+                    sucursal: sucursalActual,
+                    tipo: tipo,
                     monto: monto,
                     fecha_operacion: fechaMov,
                     motivo: motivo || "Sin especificación",
@@ -932,7 +948,7 @@
                 alert(`✅ ${tipo} registrado correctamente.`);
                 document.getElementById('montoMovimiento').value = "";
                 document.getElementById('motivoMovimiento').value = "";
-                await calcularDeudaTotal(); 
+                await calcularDeudaTotal();
             } catch (error) {
                 alert("Error: " + error.message);
             } finally {
@@ -1245,6 +1261,9 @@
                 Deuda Total Sucursal:<br>
                 ₡<span id="deudaTotalTxt">0</span>
             </div>
+
+            <!-- BOTÓN AGREGADO: Ver Último Cierre -->
+            <button class="btn-work" onclick="mostrarUltimoCierre()" style="margin-bottom: 12px;">📋 Ver Último Cierre</button>
 
             <button class="btn-work" onclick="toggleSeccionPrecios()">⚙️ Configurar Precios Materiales</button>
 
