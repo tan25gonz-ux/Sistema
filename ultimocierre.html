@@ -1,1 +1,228 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Último Cierre - Sucursal</title>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCi409CkmXBbun7-POejbVaIiThK2nZ1JY",
+            authDomain: "prestamos-18dd8.firebaseapp.com",
+            projectId: "prestamos-18dd8",
+            storageBucket: "prestamos-18dd8.firebasestorage.app",
+            messagingSenderId: "921713515466",
+            appId: "1:921713515466:web:0e2bcb5d67067068570d33"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let sucursalActual = "Desconocida";
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const emailUsuario = user.email ? user.email.toLowerCase().trim() : "";
+                if (emailUsuario.includes("perez")) {
+                    sucursalActual = "Perez";
+                } else if (emailUsuario.includes("paraiso")) {
+                    sucursalActual = "Paraiso";
+                } else if (emailUsuario.includes("cartago")) {
+                    sucursalActual = "Cartago";
+                } else {
+                    sucursalActual = "Desconocida";
+                }
+
+                document.getElementById('sucursal-label').innerText = sucursalActual;
+                await cargarUltimoCierre();
+            } else {
+                // Si no está logueado, redirigir al login
+                window.location.href = 'index.html';
+            }
+        });
+
+        async function cargarUltimoCierre() {
+            const contenedor = document.getElementById('detalle-cierre');
+            try {
+                const q = query(
+                    collection(db, "revisiones_faltantes"),
+                    where("sucursal", "==", sucursalActual),
+                    orderBy("timestamp", "desc"),
+                    limit(1)
+                );
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    const docData = snap.docs[0].data();
+                    // Formatear timestamp
+                    let timestampStr = 'No disponible';
+                    if (docData.timestamp) {
+                        if (docData.timestamp.toDate) {
+                            timestampStr = docData.timestamp.toDate().toLocaleString('es-CR');
+                        } else {
+                            timestampStr = docData.timestamp;
+                        }
+                    }
+                    contenedor.innerHTML = `
+                        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; border-left: 4px solid #3182ce;">
+                            <p><strong>📅 Fecha:</strong> ${docData.fecha || 'N/A'}</p>
+                            <p><strong>💰 Caja Inicio:</strong> ₡${(docData.caja_inicio || 0).toLocaleString('es-CR')}</p>
+                            <p><strong>📈 Ventas del día:</strong> ₡${(docData.total_ventas || 0).toLocaleString('es-CR')}</p>
+                            <p><strong>💵 Depósitos / Entradas:</strong> ₡${(docData.total_depositos || 0).toLocaleString('es-CR')}</p>
+                            <p><strong>📦 Pago de materiales:</strong> ₡${(docData.pago_materiales || 0).toLocaleString('es-CR')}</p>
+                            <p><strong>💸 Gastos varios:</strong> ₡${(docData.gastos_facturas || 0).toLocaleString('es-CR')}</p>
+                            <p><strong>✋ Cierre en mano:</strong> ₡${(docData.cierre_mano || 0).toLocaleString('es-CR')}</p>
+                            <p><strong>📌 Estado:</strong> ${docData.estado || 'Pendiente'}</p>
+                            <p><strong>🕒 Registrado:</strong> ${timestampStr}</p>
+                            ${docData.detalles_depositos ? `<p><strong>Detalle depósitos:</strong> ${JSON.stringify(docData.detalles_depositos)}</p>` : ''}
+                            ${docData.detalles_gastos ? `<p><strong>Detalle gastos:</strong> ${JSON.stringify(docData.detalles_gastos)}</p>` : ''}
+                        </div>
+                    `;
+                } else {
+                    contenedor.innerHTML = `
+                        <div style="background: #fff5f5; padding: 16px; border-radius: 12px; border-left: 4px solid #f56565;">
+                            <p style="color: #c53030; font-weight: bold;">No se encontraron cierres previos para esta sucursal.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error("Error al obtener el último cierre:", error);
+                contenedor.innerHTML = `<p style="color: red;">Error al cargar los datos: ${error.message}</p>`;
+            }
+        }
+
+        // Función para regresar al sistema principal
+        window.volver = function() {
+            window.location.href = 'index.html';
+        };
+
+        // Cerrar sesión
+        window.logout = function() {
+            signOut(auth).then(() => {
+                window.location.href = 'index.html';
+            });
+        };
+    </script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', -apple-system, sans-serif;
+            background: #f0f2f5;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 700px;
+            width: 100%;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            padding: 30px;
+            margin-top: 30px;
+        }
+        h1 {
+            font-size: 24px;
+            color: #1a73e8;
+            margin-bottom: 6px;
+        }
+        .subtitle {
+            color: #4a5568;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 15px;
+            transition: background 0.2s;
+        }
+        .btn-primary {
+            background: #1a73e8;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #1557b0;
+        }
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c53030;
+        }
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+        .btn-secondary:hover {
+            background: #cbd5e1;
+        }
+        .detalle {
+            margin-top: 10px;
+        }
+        .detalle p {
+            margin: 8px 0;
+            font-size: 15px;
+        }
+        .badge {
+            display: inline-block;
+            background: #ebf8ff;
+            color: #2b6cb0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .footer {
+            margin-top: 30px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 16px;
+            text-align: center;
+            color: #718096;
+            font-size: 13px;
+        }
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .btn-group { flex-direction: column; }
+            .btn { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <h1>📋 Último Cierre</h1>
+            <span class="badge">Sucursal: <span id="sucursal-label">Cargando...</span></span>
+        </div>
+        <div class="subtitle">Detalle del cierre más reciente registrado en el sistema</div>
+
+        <div id="detalle-cierre" class="detalle">
+            <p style="color: #718096;">Cargando información...</p>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn btn-primary" onclick="volver()">🔙 Volver al Sistema</button>
+            <button class="btn btn-danger" onclick="logout()">🚪 Cerrar Sesión</button>
+        </div>
+
+        <div class="footer">
+            Sistema de Facturación y Cierre &bull; Datos en tiempo real desde Firebase
+        </div>
+    </div>
+</body>
+</html>
