@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -23,6 +22,8 @@
         const auth = getAuth(app);
 
         let sucursalActual = "Desconocida";
+        let ultimoCierre = null;
+        let facturasCierre = [];
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -40,66 +41,180 @@
                 document.getElementById('sucursal-label').innerText = sucursalActual;
                 await cargarUltimoCierre();
             } else {
-                // Si no está logueado, redirigir al login
                 window.location.href = 'index.html';
             }
         });
 
         async function cargarUltimoCierre() {
-            const contenedor = document.getElementById('detalle-cierre');
             try {
-                const q = query(
+                // 1. Obtener el último cierre
+                const qCierre = query(
                     collection(db, "revisiones_faltantes"),
                     where("sucursal", "==", sucursalActual),
                     orderBy("timestamp", "desc"),
                     limit(1)
                 );
-                const snap = await getDocs(q);
-                if (!snap.empty) {
-                    const docData = snap.docs[0].data();
-                    // Formatear timestamp
-                    let timestampStr = 'No disponible';
-                    if (docData.timestamp) {
-                        if (docData.timestamp.toDate) {
-                            timestampStr = docData.timestamp.toDate().toLocaleString('es-CR');
-                        } else {
-                            timestampStr = docData.timestamp;
-                        }
-                    }
-                    contenedor.innerHTML = `
-                        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; border-left: 4px solid #3182ce;">
-                            <p><strong>📅 Fecha:</strong> ${docData.fecha || 'N/A'}</p>
-                            <p><strong>💰 Caja Inicio:</strong> ₡${(docData.caja_inicio || 0).toLocaleString('es-CR')}</p>
-                            <p><strong>📈 Ventas del día:</strong> ₡${(docData.total_ventas || 0).toLocaleString('es-CR')}</p>
-                            <p><strong>💵 Depósitos / Entradas:</strong> ₡${(docData.total_depositos || 0).toLocaleString('es-CR')}</p>
-                            <p><strong>📦 Pago de materiales:</strong> ₡${(docData.pago_materiales || 0).toLocaleString('es-CR')}</p>
-                            <p><strong>💸 Gastos varios:</strong> ₡${(docData.gastos_facturas || 0).toLocaleString('es-CR')}</p>
-                            <p><strong>✋ Cierre en mano:</strong> ₡${(docData.cierre_mano || 0).toLocaleString('es-CR')}</p>
-                            <p><strong>📌 Estado:</strong> ${docData.estado || 'Pendiente'}</p>
-                            <p><strong>🕒 Registrado:</strong> ${timestampStr}</p>
-                            ${docData.detalles_depositos ? `<p><strong>Detalle depósitos:</strong> ${JSON.stringify(docData.detalles_depositos)}</p>` : ''}
-                            ${docData.detalles_gastos ? `<p><strong>Detalle gastos:</strong> ${JSON.stringify(docData.detalles_gastos)}</p>` : ''}
-                        </div>
-                    `;
-                } else {
-                    contenedor.innerHTML = `
-                        <div style="background: #fff5f5; padding: 16px; border-radius: 12px; border-left: 4px solid #f56565;">
-                            <p style="color: #c53030; font-weight: bold;">No se encontraron cierres previos para esta sucursal.</p>
-                        </div>
-                    `;
+                const snapCierre = await getDocs(qCierre);
+                if (snapCierre.empty) {
+                    mostrarSinCierre();
+                    return;
                 }
+                const docCierre = snapCierre.docs[0];
+                ultimoCierre = docCierre.data();
+                ultimoCierre.id = docCierre.id;
+
+                // 2. Obtener las facturas de ese cierre (usando cierre_id)
+                const qFacturas = query(
+                    collection(db, "facturas_compras"),
+                    where("cierre_id", "==", ultimoCierre.id),
+                    where("sucursal", "==", sucursalActual)
+                );
+                const snapFacturas = await getDocs(qFacturas);
+                facturasCierre = [];
+                snapFacturas.forEach(doc => {
+                    facturasCierre.push(doc.data());
+                });
+
+                // 3. Renderizar todo
+                renderizarCierre();
             } catch (error) {
-                console.error("Error al obtener el último cierre:", error);
-                contenedor.innerHTML = `<p style="color: red;">Error al cargar los datos: ${error.message}</p>`;
+                console.error("Error cargando datos:", error);
+                document.getElementById('detalle-cierre').innerHTML = `
+                    <div style="background: #fff5f5; padding: 16px; border-radius: 12px; border-left: 4px solid #f56565;">
+                        <p style="color: #c53030; font-weight: bold;">Error al cargar los datos: ${error.message}</p>
+                    </div>
+                `;
             }
         }
 
-        // Función para regresar al sistema principal
+        function mostrarSinCierre() {
+            document.getElementById('detalle-cierre').innerHTML = `
+                <div style="background: #fff5f5; padding: 16px; border-radius: 12px; border-left: 4px solid #f56565;">
+                    <p style="color: #c53030; font-weight: bold;">No se encontraron cierres previos para esta sucursal.</p>
+                </div>
+            `;
+        }
+
+        function renderizarCierre() {
+            const datos = ultimoCierre;
+            const fecha = datos.fecha || 'N/A';
+            const cajaInicio = (datos.caja_inicio || 0).toLocaleString('es-CR');
+            const ventas = (datos.total_ventas || 0).toLocaleString('es-CR');
+            const depositos = (datos.total_depositos || 0).toLocaleString('es-CR');
+            const pagoMateriales = (datos.pago_materiales || 0).toLocaleString('es-CR');
+            const gastos = (datos.gastos_facturas || 0).toLocaleString('es-CR');
+            const cierreMano = (datos.cierre_mano || 0).toLocaleString('es-CR');
+            const estado = datos.estado || 'Pendiente';
+            let timestampStr = 'No disponible';
+            if (datos.timestamp) {
+                if (datos.timestamp.toDate) {
+                    timestampStr = datos.timestamp.toDate().toLocaleString('es-CR');
+                } else {
+                    timestampStr = datos.timestamp;
+                }
+            }
+
+            // Procesar depósitos y gastos para mostrarlos bonito
+            let depositosHtml = '';
+            if (datos.detalles_depositos && datos.detalles_depositos.length > 0) {
+                depositosHtml = datos.detalles_depositos.map(d => 
+                    `<span style="display:inline-block; background:#e6fffa; padding:4px 10px; border-radius:20px; margin:3px; font-size:13px;">${d.descripcion || 'Depósito'}: ₡${d.monto.toLocaleString('es-CR')}</span>`
+                ).join(' ');
+            } else {
+                depositosHtml = '<span style="color:#718096;">Sin depósitos registrados</span>';
+            }
+
+            let gastosHtml = '';
+            if (datos.detalles_gastos && datos.detalles_gastos.length > 0) {
+                gastosHtml = datos.detalles_gastos.map(g => 
+                    `<span style="display:inline-block; background:#fff5f5; padding:4px 10px; border-radius:20px; margin:3px; font-size:13px;">${g.descripcion || 'Gasto'}: ₡${g.monto.toLocaleString('es-CR')}</span>`
+                ).join(' ');
+            } else {
+                gastosHtml = '<span style="color:#718096;">Sin gastos registrados</span>';
+            }
+
+            // Generar tabla de materiales comprados
+            let materialesHtml = '';
+            if (facturasCierre.length === 0) {
+                materialesHtml = `<tr><td colspan="3" style="text-align:center; color:#999;">No se registraron compras de materiales en este cierre.</td></tr>`;
+            } else {
+                // Acumular materiales por tipo
+                const acumulado = {};
+                facturasCierre.forEach(fact => {
+                    if (fact.detalles_materiales) {
+                        fact.detalles_materiales.forEach(item => {
+                            const mat = item.material;
+                            if (!acumulado[mat]) {
+                                acumulado[mat] = { kilos: 0, costo: 0 };
+                            }
+                            acumulado[mat].kilos += item.kilos || 0;
+                            acumulado[mat].costo += item.total_pago || 0;
+                        });
+                    }
+                });
+                // Ordenar por costo descendente
+                const sorted = Object.entries(acumulado).sort((a, b) => b[1].costo - a[1].costo);
+                sorted.forEach(([material, data]) => {
+                    materialesHtml += `
+                        <tr>
+                            <td><strong>${material}</strong></td>
+                            <td>${data.kilos.toFixed(1)} kg</td>
+                            <td>₡${data.costo.toLocaleString('es-CR')}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            // Construir el HTML final
+            document.getElementById('detalle-cierre').innerHTML = `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:20px;">
+                    <div style="background:#f8fafc; padding:14px; border-radius:12px; border-left:4px solid #3182ce;">
+                        <p style="margin:4px 0;"><strong>📅 Fecha:</strong> ${fecha}</p>
+                        <p style="margin:4px 0;"><strong>💰 Caja Inicio:</strong> ₡${cajaInicio}</p>
+                        <p style="margin:4px 0;"><strong>📈 Ventas:</strong> ₡${ventas}</p>
+                        <p style="margin:4px 0;"><strong>💵 Depósitos:</strong> ₡${depositos}</p>
+                    </div>
+                    <div style="background:#f8fafc; padding:14px; border-radius:12px; border-left:4px solid #2f855a;">
+                        <p style="margin:4px 0;"><strong>📦 Pago Materiales:</strong> ₡${pagoMateriales}</p>
+                        <p style="margin:4px 0;"><strong>💸 Gastos:</strong> ₡${gastos}</p>
+                        <p style="margin:4px 0;"><strong>✋ Cierre en mano:</strong> ₡${cierreMano}</p>
+                        <p style="margin:4px 0;"><strong>📌 Estado:</strong> <span style="background:#fefcbf; padding:2px 10px; border-radius:12px;">${estado}</span></p>
+                    </div>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <p><strong>🕒 Registrado:</strong> ${timestampStr}</p>
+                </div>
+                <div style="background:#edf2f7; padding:12px; border-radius:10px; margin-bottom:16px;">
+                    <p style="margin:0 0 6px 0;"><strong>💳 Depósitos:</strong></p>
+                    <div>${depositosHtml}</div>
+                </div>
+                <div style="background:#edf2f7; padding:12px; border-radius:10px; margin-bottom:20px;">
+                    <p style="margin:0 0 6px 0;"><strong>💸 Gastos:</strong></p>
+                    <div>${gastosHtml}</div>
+                </div>
+
+                <h3 style="color:#2b6cb0; margin-top:24px; margin-bottom:12px;">📋 Materiales Comprados en este Cierre</h3>
+                <div style="overflow-x:auto; border-radius:12px; border:1px solid #e2e8f0;">
+                    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                        <thead style="background:#f1f5f9;">
+                            <tr>
+                                <th style="padding:10px 14px; text-align:left;">Material</th>
+                                <th style="padding:10px 14px; text-align:right;">Kilos</th>
+                                <th style="padding:10px 14px; text-align:right;">Costo Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${materialesHtml}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
         window.volver = function() {
             window.location.href = 'index.html';
         };
 
-        // Cerrar sesión
         window.logout = function() {
             signOut(auth).then(() => {
                 window.location.href = 'index.html';
@@ -118,38 +233,54 @@
             min-height: 100vh;
         }
         .container {
-            max-width: 700px;
+            max-width: 900px;
             width: 100%;
             background: white;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
             padding: 30px;
             margin-top: 30px;
         }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
         h1 {
-            font-size: 24px;
+            font-size: 26px;
             color: #1a73e8;
-            margin-bottom: 6px;
+            margin: 0;
+        }
+        .badge {
+            background: #ebf8ff;
+            color: #2b6cb0;
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 15px;
         }
         .subtitle {
             color: #4a5568;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
             font-size: 16px;
         }
         .btn-group {
             display: flex;
             gap: 12px;
-            margin-top: 20px;
+            margin-top: 28px;
             flex-wrap: wrap;
         }
         .btn {
-            padding: 10px 20px;
+            padding: 10px 24px;
             border: none;
-            border-radius: 8px;
-            font-weight: bold;
+            border-radius: 10px;
+            font-weight: 600;
             cursor: pointer;
             font-size: 15px;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
         .btn-primary {
             background: #1a73e8;
@@ -157,6 +288,7 @@
         }
         .btn-primary:hover {
             background: #1557b0;
+            transform: translateY(-1px);
         }
         .btn-danger {
             background: #e53e3e;
@@ -164,29 +296,6 @@
         }
         .btn-danger:hover {
             background: #c53030;
-        }
-        .btn-secondary {
-            background: #e2e8f0;
-            color: #2d3748;
-        }
-        .btn-secondary:hover {
-            background: #cbd5e1;
-        }
-        .detalle {
-            margin-top: 10px;
-        }
-        .detalle p {
-            margin: 8px 0;
-            font-size: 15px;
-        }
-        .badge {
-            display: inline-block;
-            background: #ebf8ff;
-            color: #2b6cb0;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 14px;
         }
         .footer {
             margin-top: 30px;
@@ -196,22 +305,24 @@
             color: #718096;
             font-size: 13px;
         }
-        @media (max-width: 600px) {
+        @media (max-width: 700px) {
             .container { padding: 20px; }
+            .header { flex-direction: column; align-items: flex-start; }
             .btn-group { flex-direction: column; }
             .btn { width: 100%; }
+            #detalle-cierre > div:first-child { grid-template-columns: 1fr !important; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div class="header">
             <h1>📋 Último Cierre</h1>
-            <span class="badge">Sucursal: <span id="sucursal-label">Cargando...</span></span>
+            <span class="badge">🏢 <span id="sucursal-label">Cargando...</span></span>
         </div>
-        <div class="subtitle">Detalle del cierre más reciente registrado en el sistema</div>
+        <div class="subtitle">Detalle completo del cierre más reciente</div>
 
-        <div id="detalle-cierre" class="detalle">
+        <div id="detalle-cierre">
             <p style="color: #718096;">Cargando información...</p>
         </div>
 
