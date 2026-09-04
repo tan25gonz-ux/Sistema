@@ -42,9 +42,6 @@
         const ID_SECUNDARIA = '1144';
         let temporizadorFirestore = null;
 
-        // Variable para almacenar los datos del último cierre
-        let ultimoCierreData = null;
-
         // ---------- DATOS DE CADA SUCURSAL ----------
         const datosSucursales = {
             "Paraiso": {
@@ -183,8 +180,6 @@
                 const snap = await getDocs(q);
                 if (!snap.empty) {
                     const docData = snap.docs[0].data();
-                    // Guardamos todos los datos para el botón
-                    ultimoCierreData = docData;
                     const inicio = parseFloat(docData.caja_inicio) || 0;
                     const cierre = parseFloat(docData.cierre_mano) || 0;
 
@@ -194,7 +189,6 @@
                         <small style="color:#718096;">(${docData.fecha || ''})</small>
                     `;
                 } else {
-                    ultimoCierreData = null;
                     document.getElementById('infoUltimoCierre').innerText = "No se encontraron cierres previos registrados.";
                 }
             } catch (error) {
@@ -202,24 +196,9 @@
             }
         }
 
-        // Función simple para mostrar el último cierre en un alert
+        // Función para redirigir a la página de último cierre
         window.mostrarUltimoCierre = function() {
-            if (!ultimoCierreData) {
-                alert('No hay un cierre previo registrado para esta sucursal.');
-                return;
-            }
-            const datos = ultimoCierreData;
-            alert(
-                `📋 ÚLTIMO CIERRE\n\n` +
-                `Fecha: ${datos.fecha || 'N/A'}\n` +
-                `Caja Inicio: ₡${(datos.caja_inicio || 0).toLocaleString('es-CR')}\n` +
-                `Ventas del día: ₡${(datos.total_ventas || 0).toLocaleString('es-CR')}\n` +
-                `Depósitos/Entradas: ₡${(datos.total_depositos || 0).toLocaleString('es-CR')}\n` +
-                `Pago de materiales: ₡${(datos.pago_materiales || 0).toLocaleString('es-CR')}\n` +
-                `Gastos varios: ₡${(datos.gastos_facturas || 0).toLocaleString('es-CR')}\n` +
-                `Cierre en mano: ₡${(datos.cierre_mano || 0).toLocaleString('es-CR')}\n` +
-                `Estado: ${datos.estado || 'Pendiente'}`
-            );
+            window.location.href = 'ultimocierre.html';
         };
 
         async function cargarPreciosDesdeFirebase() {
@@ -1262,7 +1241,7 @@
                 ₡<span id="deudaTotalTxt">0</span>
             </div>
 
-            <!-- BOTÓN AGREGADO: Ver Último Cierre -->
+            <!-- Botón para ver último cierre (redirige a ultimocierre.html) -->
             <button class="btn-work" onclick="mostrarUltimoCierre()" style="margin-bottom: 12px;">📋 Ver Último Cierre</button>
 
             <button class="btn-work" onclick="toggleSeccionPrecios()">⚙️ Configurar Precios Materiales</button>
