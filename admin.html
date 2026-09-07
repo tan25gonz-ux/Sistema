@@ -204,7 +204,7 @@
             }
         }
 
-        // ========== FILTRO Y RENDER DE FACTURAS ==========
+        // ========== FILTRO Y RENDER DE FACTURAS (con orden ascendente) ==========
         window.aplicarFiltrosYRenderizar = () => {
             const busqueda = document.getElementById('buscarNumFactura').value.trim().toLowerCase();
             const sucursal = document.getElementById('filtroSucursalFact').value;
@@ -223,6 +223,13 @@
                     coincideEst = cierre ? cierre.estado === estado : false;
                 }
                 return coincideNum && coincideSuc && coincideFec && coincideEst;
+            });
+
+            // 🔽 ORDENAR DE MENOR A MAYOR POR NÚMERO DE FACTURA
+            filtradas.sort((a, b) => {
+                const numA = parseInt((a.num_factura || '').replace('#', '')) || 0;
+                const numB = parseInt((b.num_factura || '').replace('#', '')) || 0;
+                return numA - numB;
             });
 
             calcularInventarioTeorico(filtradas);
