@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Totales - Inventario y Cajas</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, query, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCi409CkmXBbun7-POejbVaIiThK2nZ1JY",
+            authDomain: "prestamos-18dd8.firebaseapp.com",
+            projectId: "prestamos-18dd8",
+            storageBucket: "prestamos-18dd8.firebasestorage.app",
+            messagingSenderId: "921713515466",
+            appId: "1:921713515466:web:0e2bcb5d67067068570d33"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let todosLosCierres = [];
+        let todasLasFacturas = [];
+        let ultimoCalculo = { cierres: [], facturas: [] };
+
+        // ========== HELPERS ==========
+        const num = (v) => parseFloat(v) || 0;
+        const money = (v) => "₡" + num(v).toLocaleString('es-CR', { maximumFractionDigits: 0 });
+
+        function getPagoMateriales(c) {
+            return num(c.pago_materiales ?? c.pago_materials);
+        }
+        function getOtrosGastos(c) {
+            return num(c.gastos_facturas ?? c.otros_gastos ?? c.gastos_varios);
+        }
+        function sumarDepositos(dep) {
+            if (!Array.isArray(dep)) return 0;
+            return dep.reduce((t, d) => t + num(d.monto), 0);
+        }
+        function contarDepositos(dep) {
+            return Array.isArray(dep) ? dep.length : 0;
+        }
+
+        /** Normaliza fechas a YYYY-MM-DD para poder comparar rangos */
+        function normalizarFecha(f) {
+            if (!f) return '';
+            const s = String(f).trim();
+            let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+            m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+            if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+            return s;
+        }
+        function fmtInput(d) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${dd}`;
+        }
+
+        // ========== AUTENTICACIÓN ==========
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                document.getElementById('modulo-totales').style.display = 'block';
+                await cargarDatos();
+            } else {
+                alert("Por favor inicia sesión primero.");
+                window.location.href = "index.html";
+            }
+        });
+        window.logoutAdmin = () => signOut(auth).then(() => window.location.reload());
+
+        // ========== CARGA DE DATOS ==========
+        async function cargarDatos() {
+            try {
+                const qCierres = query(collection(db, "revisiones_faltantes"), orderBy("timestamp", "desc"));
+                const snapCierres = await getDocs(qCierres);
+                todosLosCierres = snapCierres.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                const qFacturas = query(collection(db, "facturas_compras"), orderBy("timestamp", "desc"));
+                const snapFacturas = await getDocs(qFacturas);
+                todasLasFacturas = snapFacturas.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                llenarSelectSucursales();
+                aplicarFiltrosTotales();
+            } catch (error) {
+                console.error("Error cargando datos:", error);
+                alert("Error al cargar datos: " + error.message);
+            }
+        }
+
+        function llenarSelectSucursales() {
+            const sel = document.getElementById('filtroSucursalTot');
+            const actual = sel.value;
+            const set = new Set();
+            todosLosCierres.forEach(c => { if (c.sucursal) set.add(c.sucursal.trim()); });
+            todasLasFacturas.forEach(f => { if (f.sucursal) set.add(f.sucursal.trim()); });
+
+            const ordenadas = [...set].sort((a, b) => a.localeCompare(b));
+            sel.innerHTML = `<option value="">🏢 Todas las sucursales</option>` +
+                ordenadas.map(s => `<option value="${s}">${s}</option>`).join('');
+            if (ordenadas.includes(actual)) sel.value = actual;
+        }
+
+        // ========== ATAJOS DE RANGO ==========
+        window.rangoRapido = (tipo) => {
+            const hoy = new Date();
+            const desde = document.getElementById('fechaDesde');
+            const hasta = document.getElementById('fechaHasta');
+
+            if (tipo === 'hoy') {
+                desde.value = hasta.value = fmtInput(hoy);
+            } else if (tipo === 'semana') {
+                const d = new Date(hoy);
+                const dia = d.getDay() === 0 ? 7 : d.getDay(); // lunes = 1
+                d.setDate(d.getDate() - (dia - 1));
+                desde.value = fmtInput(d);
+                hasta.value = fmtInput(hoy);
+            } else if (tipo === 'mes') {
+                const d = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                desde.value = fmtInput(d);
+                hasta.value = fmtInput(hoy);
+            } else if (tipo === 'todo') {
+                desde.value = '';
+                hasta.value = '';
+            }
+            aplicarFiltrosTotales();
+        };
+
+        // ========== FILTRADO + CÁLCULOS ==========
+        window.aplicarFiltrosTotales = () => {
+            const desde = document.getElementById('fechaDesde').value;   // YYYY-MM-DD
+            const hasta = document.getElementById('fechaHasta').value;
+            const sucursal = document.getElementById('filtroSucursalTot').value;
+            const incluirPendientes = document.getElementById('incluirPendientes').checked;
+
+            const pasaFecha = (f) => {
+                const n = normalizarFecha(f);
+                if (!n) return !desde && !hasta; // sin fecha: solo si no hay rango
+                if (desde && n < desde) return false;
+                if (hasta && n > hasta) return false;
+                return true;
+            };
+            const pasaSucursal = (s) =>
+                !sucursal ? true : (s || '').trim().toLowerCase() === sucursal.trim().toLowerCase();
+
+            const cierresFiltrados = todosLosCierres.filter(c =>
+                pasaFecha(c.fecha) && pasaSucursal(c.sucursal) &&
+                (incluirPendientes || (c.estado || 'Pendiente') === 'Aprobado')
+            );
+
+            const facturasFiltradas = todasLasFacturas.filter(f =>
+                pasaFecha(f.fecha) && pasaSucursal(f.sucursal)
+            );
+
+            ultimoCalculo = { cierres: cierresFiltrados, facturas: facturasFiltradas };
+
+            renderKPIs(cierresFiltrados, facturasFiltradas, desde, hasta, sucursal);
+            renderResumenSucursal(cierresFiltrados);
+            renderDetalleCierres(cierresFiltrados);
+            renderInventario(facturasFiltradas);
+        };
+
+        // ========== TARJETAS KPI ==========
+        function renderKPIs(cierres, facturas, desde, hasta, sucursal) {
+            let cajaInicio = 0, ventas = 0, pagoMat = 0, otrosGastos = 0, efectivo = 0, depositos = 0, cantDep = 0;
+
+            cierres.forEach(c => {
+                cajaInicio += num(c.caja_inicio);
+                ventas += num(c.total_ventas);
+                pagoMat += getPagoMateriales(c);
+                otrosGastos += getOtrosGastos(c);
+                efectivo += num(c.cierre_mano);
+                depositos += sumarDepositos(c.detalles_depositos);
+                cantDep += contarDepositos(c.detalles_depositos);
+            });
+
+            // Faltante / Sobrante global
+            // Esperado en caja = inicio + ventas - compras - otros gastos - depósitos
+            const esperado = cajaInicio + ventas - pagoMat - otrosGastos - depositos;
+            const diferencia = efectivo - esperado;
+
+            // Inventario / compras
+            let kilos = 0, inversion = 0;
+            facturas.forEach(f => {
+                if (Array.isArray(f.detalles_materiales)) {
+                    f.detalles_materiales.forEach(m => {
+                        kilos += num(m.kilos);
+                        inversion += num(m.total_pago);
+                    });
+                }
+            });
+
+            document.getElementById('kpi-cierres-count').innerText = cierres.length;
+            document.getElementById('kpi-caja-inicio').innerText = money(cajaInicio);
+            document.getElementById('kpi-ventas').innerText = money(ventas);
+            document.getElementById('kpi-gastos-mat').innerText = money(pagoMat);
+            document.getElementById('kpi-gastos-otros').innerText = money(otrosGastos);
+            document.getElementById('kpi-depositos').innerText = money(depositos);
+            document.getElementById('kpi-depositos-sub').innerText =
+                `${cantDep} depósito${cantDep !== 1 ? 's' : ''}`;
+            document.getElementById('kpi-efectivo').innerText = money(efectivo);
+
+            const difEl = document.getElementById('kpi-diferencia');
+            difEl.innerText = money(diferencia);
+            difEl.style.color = diferencia < -1 ? '#f87171'
+                              : diferencia > 1 ? '#4ade80'
+                              : '#e2e8f0';
+
+            // Bloque de compras
+            document.getElementById('kpi-facturas-count').innerText = facturas.length;
+            document.getElementById('kpi-kilos').innerText =
+                kilos.toLocaleString('es-CR', { maximumFractionDigits: 1 }) + ' kg';
+            document.getElementById('kpi-inversion').innerText = money(inversion);
+
+            // Subtítulo del período
+            const txtDesde = desde ? desde : 'Inicio';
+            const txtHasta = hasta ? hasta : 'Hoy';
+            const txtSuc = sucursal ? sucursal.toUpperCase() : 'TODAS LAS SUCURSALES';
+            document.getElementById('titulo-periodo').innerText =
+                `${txtSuc}  •  📅 ${txtDesde}  →  ${txtHasta}`;
+        }
+
+        // ========== RESUMEN POR SUCURSAL ==========
+        function renderResumenSucursal(cierres) {
+            const tbody = document.getElementById('body-resumen-sucursal');
+            tbody.innerHTML = '';
+
+            if (!cierres.length) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#94a3b8;">Sin datos en el rango seleccionado.</td></tr>`;
+                return;
+            }
+
+            const mapa = {};
+            cierres.forEach(c => {
+                const key = (c.sucursal || 'General').trim();
+                if (!mapa[key]) mapa[key] = {
+                    sucursal: key, n: 0, cajaInicio: 0, ventas: 0, pagoMat: 0,
+                    otros: 0, depositos: 0, efectivo: 0
+                };
+                const r = mapa[key];
+                r.n++;
+                r.cajaInicio += num(c.caja_inicio);
+                r.ventas += num(c.total_ventas);
+                r.pagoMat += getPagoMateriales(c);
+                r.otros += getOtrosGastos(c);
+                r.depositos += sumarDepositos(c.detalles_depositos);
+                r.efectivo += num(c.cierre_mano);
+            });
+
+            const totales = { n: 0, cajaInicio: 0, ventas: 0, pagoMat: 0, otros: 0, depositos: 0, efectivo: 0 };
+
+            Object.values(mapa).sort((a, b) => a.sucursal.localeCompare(b.sucursal)).forEach(r => {
+                const esperado = r.cajaInicio + r.ventas - r.pagoMat - r.otros - r.depositos;
+                const dif = r.efectivo - esperado;
+                const colorDif = dif < -1 ? '#dc2626' : dif > 1 ? '#059669' : '#64748b';
+
+                totales.n += r.n; totales.cajaInicio += r.cajaInicio; totales.ventas += r.ventas;
+                totales.pagoMat += r.pagoMat; totales.otros += r.otros;
+                totales.depositos += r.depositos; totales.efectivo += r.efectivo;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><span class="badge-sucursal">${r.sucursal}</span></td>
+                        <td style="text-align:center;font-weight:600;">${r.n}</td>
+                        <td>${money(r.cajaInicio)}</td>
+                        <td style="color:#059669;font-weight:600;">${money(r.ventas)}</td>
+                        <td style="color:#dc2626;">${money(r.pagoMat)}</td>
+                        <td style="color:#b45309;">${money(r.otros)}</td>
+                        <td style="color:#2563eb;font-weight:600;">${money(r.depositos)}</td>
+                        <td style="font-weight:700;">${money(r.efectivo)}</td>
+                        <td style="font-weight:700;color:${colorDif};">${money(dif)}</td>
+                    </tr>
+                `;
+            });
+
+            const espTot = totales.cajaInicio + totales.ventas - totales.pagoMat - totales.otros - totales.depositos;
+            const difTot = totales.efectivo - espTot;
+            const colorDifTot = difTot < -1 ? '#dc2626' : difTot > 1 ? '#059669' : '#64748b';
+
+            tbody.innerHTML += `
+                <tr class="fila-totales">
+                    <td>🔢 TOTAL GENERAL</td>
+                    <td style="text-align:center;">${totales.n}</td>
+                    <td>${money(totales.cajaInicio)}</td>
+                    <td>${money(totales.ventas)}</td>
+                    <td>${money(totales.pagoMat)}</td>
+                    <td>${money(totales.otros)}</td>
+                    <td>${money(totales.depositos)}</td>
+                    <td>${money(totales.efectivo)}</td>
+                    <td style="color:${colorDifTot};">${money(difTot)}</td>
+                </tr>
+            `;
+        }
+
+        // ========== DETALLE DE CIERRES ==========
+        function renderDetalleCierres(cierres) {
+            const tbody = document.getElementById('body-detalle-cierres');
+            tbody.innerHTML = '';
+
+            if (!cierres.length) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#94a3b8;">Sin cierres en el rango seleccionado.</td></tr>`;
+                return;
+            }
+
+            const ordenados = [...cierres].sort((a, b) =>
+                normalizarFecha(b.fecha).localeCompare(normalizarFecha(a.fecha))
+            );
+
+            const t = { cajaInicio: 0, ventas: 0, pagoMat: 0, otros: 0, depositos: 0, efectivo: 0 };
+
+            ordenados.forEach(c => {
+                const pagoMat = getPagoMateriales(c);
+                const otros = getOtrosGastos(c);
+                const depos = sumarDepositos(c.detalles_depositos);
+                const cantDep = contarDepositos(c.detalles_depositos);
+                const efectivo = num(c.cierre_mano);
+                const cajaInicio = num(c.caja_inicio);
+                const ventas = num(c.total_ventas);
+
+                const esperado = cajaInicio + ventas - pagoMat - otros - depos;
+                const dif = efectivo - esperado;
+                const colorDif = dif < -1 ? '#dc2626' : dif > 1 ? '#059669' : '#64748b';
+
+                t.cajaInicio += cajaInicio; t.ventas += ventas; t.pagoMat += pagoMat;
+                t.otros += otros; t.depositos += depos; t.efectivo += efectivo;
+
+                const badgeClass = (c.estado || 'Pendiente') === 'Pendiente' ? 'status-pendiente' : 'status-aprobado';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><span class="badge-sucursal">${c.sucursal || 'General'}</span></td>
+                        <td><div style="font-size:12px;font-weight:600;">${c.fecha || '—'}</div>
+                            <span class="status-badge ${badgeClass}">${c.estado || 'Pendiente'}</span></td>
+                        <td>${money(cajaInicio)}</td>
+                        <td style="color:#059669;">${money(ventas)}</td>
+                        <td style="color:#dc2626;">${money(pagoMat)}</td>
+                        <td style="color:#b45309;">${money(otros)}</td>
+                        <td style="color:#2563eb;">
+                            ${depos > 0 ? `${money(depos)} <small style="color:#64748b;">(${cantDep})</small>` : '—'}
+                        </td>
+                        <td style="font-weight:700;">${money(efectivo)}</td>
+                        <td style="font-weight:700;color:${colorDif};">${money(dif)}</td>
+                    </tr>
+                `;
+            });
+
+            const espT = t.cajaInicio + t.ventas - t.pagoMat - t.otros - t.depositos;
+            const difT = t.efectivo - espT;
+            const colorDifT = difT < -1 ? '#dc2626' : difT > 1 ? '#059669' : '#64748b';
+
+            tbody.innerHTML += `
+                <tr class="fila-totales">
+                    <td colspan="2">🔢 TOTALES (${ordenados.length} cierres)</td>
+                    <td>${money(t.cajaInicio)}</td>
+                    <td>${money(t.ventas)}</td>
+                    <td>${money(t.pagoMat)}</td>
+                    <td>${money(t.otros)}</td>
+                    <td>${money(t.depositos)}</td>
+                    <td>${money(t.efectivo)}</td>
+                    <td style="color:${colorDifT};">${money(difT)}</td>
+                </tr>
+            `;
+        }
+
+        // ========== INVENTARIO / COMPRAS ==========
+        function renderInventario(facturas) {
+            const tbody = document.getElementById('body-inventario-totales');
+            tbody.innerHTML = '';
+
+            const mapa = {};
+            facturas.forEach(f => {
+                if (Array.isArray(f.detalles_materiales)) {
+                    f.detalles_materiales.forEach(m => {
+                        const mat = m.material || 'Sin nombre';
+                        if (!mapa[mat]) mapa[mat] = { kilos: 0, inversion: 0, veces: 0 };
+                        mapa[mat].kilos += num(m.kilos);
+                        mapa[mat].inversion += num(m.total_pago);
+                        mapa[mat].veces++;
+                    });
+                }
+            });
+
+            if (!Object.keys(mapa).length) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">Sin materiales en el rango.</td></tr>`;
+                return;
+            }
+
+            const totales = { kilos: 0, inversion: 0, veces: 0 };
+
+            Object.entries(mapa)
+                .sort((a, b) => b[1].inversion - a[1].inversion)
+                .forEach(([mat, d]) => {
+                    totales.kilos += d.kilos;
+                    totales.inversion += d.inversion;
+                    totales.veces += d.veces;
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><div class="material-tag">📦 ${mat}</div></td>
+                            <td style="text-align:center;color:#64748b;">${d.veces}</td>
+                            <td style="color:#059669;font-weight:700;">
+                                ${d.kilos.toLocaleString('es-CR', { maximumFractionDigits: 1 })} kg
+                            </td>
+                            <td style="font-weight:600;">${money(d.inversion)}</td>
+                        </tr>
+                    `;
+                });
+
+            tbody.innerHTML += `
+                <tr class="fila-totales">
+                    <td>🔢 TOTAL GENERAL</td>
+                    <td style="text-align:center;">${totales.veces}</td>
+                    <td>${totales.kilos.toLocaleString('es-CR', { maximumFractionDigits: 1 })} kg</td>
+                    <td>${money(totales.inversion)}</td>
+                </tr>
+            `;
+        }
+
+        // ========== EXPORTAR CSV ==========
+        window.exportarCSV = () => {
+            const { cierres } = ultimoCalculo;
+            if (!cierres.length) { alert("No hay datos para exportar."); return; }
+
+            const cab = ["Sucursal", "Fecha", "Estado", "Caja Inicio", "Ventas",
+                         "Compras Materiales", "Otros Gastos", "Depositos", "Efectivo", "Diferencia"];
+
+            const filas = cierres.map(c => {
+                const pagoMat = getPagoMateriales(c);
+                const otros = getOtrosGastos(c);
+                const depos = sumarDepositos(c.detalles_depositos);
+                const efectivo = num(c.cierre_mano);
+                const esperado = num(c.caja_inicio) + num(c.total_ventas) - pagoMat - otros - depos;
+                return [
+                    c.sucursal || 'General',
+                    c.fecha || '',
+                    c.estado || 'Pendiente',
+                    num(c.caja_inicio),
+                    num(c.total_ventas),
+                    pagoMat,
+                    otros,
+                    depos,
+                    efectivo,
+                    efectivo - esperado
+                ];
+            });
+
+            const csv = [cab, ...filas]
+                .map(f => f.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+                .join('\n');
+
+            const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `totales_${fmtInput(new Date())}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        window.refrescarPanelTotales = () => cargarDatos();
+    </script>
+
+    <style>
+        :root {
+            --bg-main: #f8fafc;
+            --surface: #ffffff;
+            --primary: #2563eb;
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --radius-lg: 12px;
+            --radius-md: 8px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-main);
+            margin: 0;
+            padding: 24px;
+            color: var(--text-dark);
+        }
+        .header-admin {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--surface);
+            padding: 16px 24px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header-admin h2 { margin:0; font-size:20px; font-weight:700; display:flex; align-items:center; gap:10px; }
+        .header-actions { display:flex; gap:10px; flex-wrap:wrap; }
+        .btn-logout { background:#ef4444; color:white; border:none; padding:8px 14px; border-radius:var(--radius-md); font-weight:600; cursor:pointer; }
+        .btn-logout:hover { background:#dc2626; }
+        .btn-refresh { background:#0d9488; color:white; border:none; padding:8px 14px; border-radius:var(--radius-md); font-weight:600; cursor:pointer; }
+        .btn-refresh:hover { background:#0f766e; }
+        .btn-export { background:#7c3aed; color:white; border:none; padding:8px 14px; border-radius:var(--radius-md); font-weight:600; cursor:pointer; }
+        .btn-export:hover { background:#6d28d9; }
+
+        .card {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .card-header h3 { margin:0; font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px; }
+        .card-subtitle { font-size:12px; color:var(--text-muted); margin-top:4px; }
+
+        /* ---- Filtros ---- */
+        .filtros-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1.2fr auto;
+            gap: 12px;
+            align-items: end;
+        }
+        @media (max-width: 900px) { .filtros-grid { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 560px) { .filtros-grid { grid-template-columns: 1fr; } }
+
+        .campo { display: flex; flex-direction: column; gap: 5px; }
+        .campo label {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            color: var(--text-muted); letter-spacing: .5px;
+        }
+        input, select {
+            width:100%;
+            padding:8px 12px;
+            border:1px solid var(--border-color);
+            border-radius:var(--radius-md);
+            font-size:13px;
+            height:38px;
+            background:var(--surface);
+            color:var(--text-dark);
+            outline:none;
+            font-family: inherit;
+        }
+        input:focus, select:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+
+        .atajos { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+        .chip {
+            background:#f1f5f9; border:1px solid var(--border-color);
+            padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600;
+            cursor:pointer; color:#475569; transition:.15s;
+        }
+        .chip:hover { background:#e2e8f0; color:var(--text-dark); }
+        .chip.activo { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+        .switch-inline {
+            display:flex; align-items:center; gap:8px; margin-top:14px;
+            font-size:12px; font-weight:600; color:var(--text-muted);
+        }
+        .switch-inline input { width:auto; height:auto; }
+
+        /* ---- Período ---- */
+        .periodo-bar {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            color: #fff;
+            border-radius: var(--radius-lg);
+            padding: 14px 22px;
+            margin-bottom: 20px;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: .3px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* ---- KPIs ---- */
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .kpi-card {
+            background: var(--surface);
+            padding: 16px 18px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--primary);
+        }
+        .kpi-card.verde { border-left-color: #059669; }
+        .kpi-card.rojo { border-left-color: #dc2626; }
+        .kpi-card.ambar { border-left-color: #f59e0b; }
+        .kpi-card.morado { border-left-color: #7c3aed; }
+        .kpi-card.oscuro { border-left-color: #0f172a; background:#0f172a; }
+        .kpi-card .label {
+            font-size:11px; font-weight:700; text-transform:uppercase;
+            color:var(--text-muted); letter-spacing:.5px;
+        }
+        .kpi-card.oscuro .label { color:#94a3b8; }
+        .kpi-card .value { font-size:21px; font-weight:800; color:var(--text-dark); margin-top:4px; }
+        .kpi-card.oscuro .value { color:#38bdf8; }
+        .kpi-card .sub { font-size:11px; color:var(--text-muted); margin-top:2px; }
+
+        /* ---- Tablas ---- */
+        .table-responsive { width:100%; overflow-x:auto; border:1px solid var(--border-color); border-radius:var(--radius-md); }
+        table { width:100%; border-collapse:collapse; font-size:13px; }
+        th {
+            background:#f8fafc;
+            padding:10px 14px;
+            font-weight:700;
+            color:var(--text-muted);
+            border-bottom:1px solid var(--border-color);
+            text-transform:uppercase;
+            font-size:11px;
+            letter-spacing:.5px;
+            text-align:left;
+            white-space:nowrap;
+        }
+        td { padding:11px 14px; border-bottom:1px solid var(--border-color); vertical-align:middle; white-space:nowrap; }
+        tr:last-child td { border-bottom:none; }
+        tbody tr:hover { background:#f8fafc; }
+
+        tr.fila-totales td {
+            background:#0f172a !important;
+            color:#38bdf8 !important;
+            font-weight:800;
+            font-size:13px;
+            border-top:2px solid var(--primary);
+            letter-spacing:.3px;
+        }
+        tr.fila-totales:hover td { background:#0f172a !important; }
+
+        .material-tag { display:flex; align-items:center; gap:6px; font-weight:600; }
+        .badge-sucursal {
+            background:#e0f2fe;
+            color:#0369a1;
+            padding:3px 8px;
+            border-radius:4px;
+            font-weight:700;
+            font-size:11px;
+            text-transform:uppercase;
+        }
+        .status-badge { padding:3px 8px; border-radius:12px; font-size:10px; font-weight:700; display:inline-block; margin-top:3px; }
+        .status-pendiente { background:#fef3c7; color:#b45309; }
+        .status-aprobado { background:#dcfce7; color:#15803d; }
+    </style>
+</head>
+<body>
+
+<div id="modulo-totales" style="display:none;">
+
+    <!-- Header -->
+    <div class="header-admin">
+        <h2>🧮 Panel de Totales</h2>
+        <div class="header-actions">
+            <button class="btn-export" onclick="exportarCSV()">⬇️ Exportar CSV</button>
+            <button class="btn-refresh" onclick="refrescarPanelTotales()">🔄 Sincronizar</button>
+            <button class="btn-logout" onclick="logoutAdmin()">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card">
+        <div class="card-header">
+            <h3>🎯 Rango de Consulta</h3>
+            <p class="card-subtitle">Selecciona el período y la sucursal para ver los totales acumulados</p>
+        </div>
+
+        <div class="filtros-grid">
+            <div class="campo">
+                <label>Desde</label>
+                <input type="date" id="fechaDesde" onchange="aplicarFiltrosTotales()">
+            </div>
+            <div class="campo">
+                <label>Hasta</label>
+                <input type="date" id="fechaHasta" onchange="aplicarFiltrosTotales()">
+            </div>
+            <div class="campo">
+                <label>Sucursal</label>
+                <select id="filtroSucursalTot" onchange="aplicarFiltrosTotales()">
+                    <option value="">🏢 Todas las sucursales</option>
+                </select>
+            </div>
+            <div class="campo">
+                <label>&nbsp;</label>
+                <button class="btn-refresh" style="height:38px;" onclick="aplicarFiltrosTotales()">Aplicar</button>
+            </div>
+        </div>
+
+        <div class="atajos">
+            <span class="chip" onclick="rangoRapido('hoy')">Hoy</span>
+            <span class="chip" onclick="rangoRapido('semana')">Esta semana</span>
+            <span class="chip" onclick="rangoRapido('mes')">Este mes</span>
+            <span class="chip" onclick="rangoRapido('todo')">Todo el historial</span>
+        </div>
+
+        <label class="switch-inline">
+            <input type="checkbox" id="incluirPendientes" onchange="aplicarFiltrosTotales()">
+            Incluir cierres en estado <b>Pendiente</b> (por defecto solo se suman los Aprobados)
+        </label>
+    </div>
+
+    <!-- Barra de período -->
+    <div class="periodo-bar" id="titulo-periodo">Selecciona un rango…</div>
+
+    <!-- KPIs de Caja -->
+    <div class="kpi-container">
+        <div class="kpi-card oscuro">
+            <div class="label">Cierres en el rango</div>
+            <div class="value" id="kpi-cierres-count">0</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">💵 Caja Inicio</div>
+            <div class="value" id="kpi-caja-inicio">₡0</div>
+        </div>
+        <div class="kpi-card verde">
+            <div class="label">📈 Ventas Totales</div>
+            <div class="value" id="kpi-ventas" style="color:#059669;">₡0</div>
+        </div>
+        <div class="kpi-card rojo">
+            <div class="label">📦 Compras Materiales</div>
+            <div class="value" id="kpi-gastos-mat" style="color:#dc2626;">₡0</div>
+        </div>
+        <div class="kpi-card ambar">
+            <div class="label">💸 Otros Gastos</div>
+            <div class="value" id="kpi-gastos-otros" style="color:#b45309;">₡0</div>
+        </div>
+        <div class="kpi-card morado">
+            <div class="label">🏦 Depósitos</div>
+            <div class="value" id="kpi-depositos" style="color:#7c3aed;">₡0</div>
+            <div class="sub" id="kpi-depositos-sub">0 depósitos</div>
+        </div>
+        <div class="kpi-card oscuro">
+            <div class="label">💰 Efectivo en Mano</div>
+            <div class="value" id="kpi-efectivo">₡0</div>
+        </div>
+        <div class="kpi-card oscuro">
+            <div class="label">⚖️ Faltante / Sobrante</div>
+            <div class="value" id="kpi-diferencia">₡0</div>
+        </div>
+    </div>
+
+    <!-- KPIs de Compras -->
+    <div class="kpi-container">
+        <div class="kpi-card">
+            <div class="label">🧾 Facturas Registradas</div>
+            <div class="value" id="kpi-facturas-count">0</div>
+        </div>
+        <div class="kpi-card verde">
+            <div class="label">⚖️ Materia Prima Total</div>
+            <div class="value" id="kpi-kilos" style="color:#059669;">0 kg</div>
+        </div>
+        <div class="kpi-card morado">
+            <div class="label">💵 Inversión en Compras</div>
+            <div class="value" id="kpi-inversion" style="color:#7c3aed;">₡0</div>
+        </div>
+    </div>
+
+    <!-- Resumen por sucursal -->
+    <div class="card">
+        <div class="card-header">
+            <h3>🏢 Resumen por Sucursal</h3>
+            <p class="card-subtitle">Totales acumulados del período seleccionado</p>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sucursal</th>
+                        <th style="text-align:center;">Cierres</th>
+                        <th>Caja Inicio</th>
+                        <th>Ventas</th>
+                        <th>Compras</th>
+                        <th>Otros Gastos</th>
+                        <th>Depósitos</th>
+                        <th>Efectivo</th>
+                        <th>Faltante / Sobrante</th>
+                    </tr>
+                </thead>
+                <tbody id="body-resumen-sucursal">
+                    <tr><td colspan="9" style="text-align:center;color:#94a3b8;">Cargando…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Detalle de cierres -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📋 Detalle de Cierres</h3>
+            <p class="card-subtitle">Todos los cierres incluidos en el rango</p>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sucursal</th>
+                        <th>Fecha / Estado</th>
+                        <th>Caja Inicio</th>
+                        <th>Ventas</th>
+                        <th>Compras</th>
+                        <th>Otros Gastos</th>
+                        <th>Depósitos</th>
+                        <th>Efectivo</th>
+                        <th>Faltante / Sobrante</th>
+                    </tr>
+                </thead>
+                <tbody id="body-detalle-cierres">
+                    <tr><td colspan="9" style="text-align:center;color:#94a3b8;">Cargando…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Inventario / materiales -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📦 Materiales Comprados en el Período</h3>
+            <p class="card-subtitle">Suma de kilos e inversión por material según las facturas del rango</p>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th style="text-align:center;">Veces</th>
+                        <th>Kilos</th>
+                        <th>Invertido</th>
+                    </tr>
+                </thead>
+                <tbody id="body-inventario-totales">
+                    <tr><td colspan="4" style="text-align:center;color:#94a3b8;">Calculando…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>
