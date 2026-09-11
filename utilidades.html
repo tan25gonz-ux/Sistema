@@ -15,6 +15,7 @@
             --success: #16a34a;
             --danger: #dc2626;
             --warning: #d97706;
+            --purple: #7c3aed;
             --radius-md: 8px;
             --radius-lg: 12px;
             --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
@@ -54,7 +55,7 @@
 
         .grid-layout {
             display: grid;
-            grid-template-columns: 340px 1fr;
+            grid-template-columns: 400px 1fr;
             gap: 20px;
         }
 
@@ -96,6 +97,24 @@
             font-size: 13px;
             height: 38px;
             outline: none;
+            transition: border-color 0.15s;
+        }
+
+        input:focus, select:focus { border-color: var(--primary); }
+
+        select:disabled {
+            background: #f1f5f9;
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .helper-text {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
         .btn-accion {
@@ -152,6 +171,128 @@
             text-align: center;
         }
 
+        /* Preview panel */
+        .preview-panel {
+            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+            border: 2px dashed #7dd3fc;
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            margin-top: 14px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .preview-panel.has-warning {
+            background: linear-gradient(135deg, #fffbeb, #fef3c7);
+            border-color: #fbbf24;
+        }
+
+        .preview-panel.is-ready {
+            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+            border-color: #4ade80;
+            border-style: solid;
+        }
+
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+        }
+
+        .preview-title {
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #0369a1;
+            letter-spacing: 0.5px;
+        }
+
+        .preview-panel.has-warning .preview-title { color: #b45309; }
+        .preview-panel.is-ready .preview-title { color: #15803d; }
+
+        .preview-status {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.7);
+            color: #0369a1;
+        }
+
+        .preview-panel.has-warning .preview-status { color: #b45309; }
+        .preview-panel.is-ready .preview-status { color: #15803d; }
+
+        .preview-rows { display: flex; flex-direction: column; gap: 6px; }
+
+        .preview-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            padding: 4px 0;
+        }
+
+        .preview-row .lbl {
+            color: #475569;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .preview-row .val {
+            font-weight: 700;
+            color: var(--text-dark);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .preview-row.highlight {
+            background: rgba(255,255,255,0.6);
+            margin: 0 -8px;
+            padding: 8px;
+            border-radius: 6px;
+            border-top: 1px solid rgba(0,0,0,0.05);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .preview-row.highlight .val {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--purple);
+        }
+
+        .preview-row.venta .val { color: var(--primary); }
+        .preview-row.costo .val { color: var(--danger); }
+        .preview-row.ganancia-total .val { color: var(--success); font-size: 18px; font-weight: 800; }
+
+        .preview-warning {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            background: rgba(255,255,255,0.7);
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #92400e;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+
+        .preview-warning .icon { font-size: 16px; flex-shrink: 0; }
+
+        .preview-empty {
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+            padding: 8px 0;
+            font-style: italic;
+        }
+
+        /* KPIs */
         .kpi-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -207,6 +348,94 @@
         }
 
         td { padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
+
+        .badge-sucursal {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .badge-ganancia {
+            background: #faf5ff;
+            color: #7c3aed;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 11px;
+        }
+
+        .section-ganancia {
+            background: linear-gradient(135deg, #faf5ff, #f5f3ff);
+            border: 1px solid #d8b4fe;
+        }
+
+        .section-ganancia h3 {
+            color: #6b21a8;
+            border-bottom-color: #d8b4fe;
+        }
+
+        .filter-row-mini {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 14px;
+            background: rgba(255,255,255,0.6);
+            padding: 10px;
+            border-radius: var(--radius-md);
+        }
+
+        .highlight-card {
+            animation: pulseHighlight 1s ease 2;
+        }
+
+        @keyframes pulseHighlight {
+            0%, 100% { box-shadow: var(--shadow-sm); }
+            50% { box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.3); }
+        }
+
+        /* Chips de sucursal en config */
+        .sucursal-chips {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .sucursal-chip {
+            flex: 1;
+            min-width: 90px;
+            padding: 8px 6px;
+            border-radius: var(--radius-md);
+            border: 2px solid var(--border-color);
+            background: #f8fafc;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .sucursal-chip:hover { border-color: var(--primary); }
+
+        .sucursal-chip.active {
+            background: var(--purple);
+            border-color: var(--purple);
+            color: white;
+            box-shadow: 0 2px 8px rgba(124,58,237,0.3);
+        }
+
+        .sucursal-chip .count {
+            display: block;
+            font-size: 10px;
+            opacity: 0.8;
+            margin-top: 2px;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -249,9 +478,19 @@
                 <button class="btn-reset" style="background:#cbd5e1; margin-top:10px;" onclick="cargarDatosBD()">🔄 Cargar de Nuevo BD</button>
             </div>
 
-            <div class="card">
+            <div class="card" id="cardContenedor">
                 <h3>📦 Agregar Nuevo Contenedor</h3>
                 
+                <div class="form-group">
+                    <label>Sucursal de Salida</label>
+                    <select id="sucursalContenedor" onchange="manejarCambioSucursal()">
+                        <option value="">-- Seleccione Sucursal --</option>
+                        <option value="Perez">Perez</option>
+                        <option value="Paraíso">Paraíso</option>
+                        <option value="Cartago">Cartago</option>
+                    </select>
+                </div>
+
                 <div class="form-group">
                     <label>N° / Código de Contenedor</label>
                     <input type="text" id="numContenedor" placeholder="Ej: CONT-2026-01">
@@ -264,28 +503,60 @@
 
                 <div class="form-group">
                     <label>Tipo de Material</label>
-                    <input type="text" id="matContenedor" placeholder="Ej: Chatarra, Aluminio, Cobre...">
+                    <select id="matContenedor" onchange="manejarCambioMaterial()" disabled>
+                        <option value="">🔒 Selecciona una sucursal primero</option>
+                    </select>
+                    <div class="helper-text" id="helperMaterial">
+                        💡 Selecciona la sucursal para cargar sus materiales.
+                    </div>
                 </div>
 
                 <div class="form-group">
                     <label>Kilos Cargados (Peso Neto)</label>
-                    <input type="number" id="kilosContenedor" placeholder="Ej: 20000">
+                    <input type="number" id="kilosContenedor" placeholder="Ej: 20000" oninput="actualizarPreview()">
                 </div>
 
-                <!-- CAMBIO: Ahora pide Precio de Compra (Costo) en lugar de Precio de Venta -->
                 <div class="form-group">
                     <label>Costo de Compra del Material (₡ por kg)</label>
-                    <input type="number" id="costoKgContenedor" placeholder="Ej: 80">
+                    <input type="number" id="costoKgContenedor" placeholder="Ej: 80" oninput="actualizarPreview()">
                 </div>
 
-                <button class="btn-accion" onclick="registrarContenedorBD()">🚢 Registrar y Despachar</button>
+                <div id="previewCalculo" class="preview-panel">
+                    <div class="preview-header">
+                        <span class="preview-title">🧮 Previsualización del Cálculo</span>
+                        <span class="preview-status" id="previewStatus">En espera</span>
+                    </div>
+                    <div id="previewContent" class="preview-empty">
+                        Selecciona sucursal y material para ver el cálculo automático.
+                    </div>
+                </div>
+
+                <button class="btn-accion" id="btnRegistrar" onclick="registrarContenedorBD()">🚢 Registrar y Despachar</button>
             </div>
 
-            <!-- Panel de Ganancias por Material -->
-            <div class="card">
-                <h3>⚙️ Ganancia por Material</h3>
+            <!-- Panel de Ganancias por Material (por sucursal) -->
+            <div class="card" id="cardConfigGanancias">
+                <h3>⚙️ Configurar Ganancia por Sucursal</h3>
+                <p style="font-size:12px; color:var(--text-muted); margin-top:-8px; margin-bottom:12px;">
+                    Cada sucursal tiene sus propios precios de ganancia por material.
+                </p>
+
+                <!-- 🆕 Chips de sucursal -->
+                <label style="font-size:12px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:6px;">Sucursal a configurar</label>
+                <div class="sucursal-chips" id="sucursalChips">
+                    <div class="sucursal-chip" data-sucursal="Perez" onclick="seleccionarSucursalConfig('Perez')">
+                        Perez <span class="count">0 materiales</span>
+                    </div>
+                    <div class="sucursal-chip" data-sucursal="Paraíso" onclick="seleccionarSucursalConfig('Paraíso')">
+                        Paraíso <span class="count">0 materiales</span>
+                    </div>
+                    <div class="sucursal-chip" data-sucursal="Cartago" onclick="seleccionarSucursalConfig('Cartago')">
+                        Cartago <span class="count">0 materiales</span>
+                    </div>
+                </div>
+
                 <div class="form-group">
-                    <label>Material</label>
+                    <label>Material para <b id="sucursalConfigLabel" style="color:var(--purple);">-</b></label>
                     <input type="text" id="matGananciaInput" placeholder="Ej: Chatarra">
                 </div>
                 <div class="form-group">
@@ -298,7 +569,7 @@
                     <table>
                         <thead><tr><th>Material</th><th>Ganancia/Kg</th><th></th></tr></thead>
                         <tbody id="bodyGananciasConfig">
-                            <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding: 10px;">Cargando configuraciones...</td></tr>
+                            <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding: 10px;">Selecciona una sucursal.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -327,6 +598,70 @@
                 <div class="kpi-card kpi-caja">
                     <div class="label">💰 Flujo Real Neto En Caja</div>
                     <div class="value" id="kpiFlujoNeto">₡0</div>
+                </div>
+            </div>
+
+            <!-- GANANCIA POR MATERIAL Y SUCURSAL -->
+            <div class="card section-ganancia">
+                <h3>💹 Ganancia por Material y Sucursal</h3>
+                <p style="font-size:12px; color:#6b21a8; margin-top:-8px; margin-bottom:12px;">
+                    Selecciona la sucursal de salida y el material para ver la ganancia real.
+                </p>
+
+                <div class="filter-row-mini">
+                    <div>
+                        <label style="font-size:11px; font-weight:700; color:#6b21a8; display:block; margin-bottom:4px;">🏢 Sucursal de Salida</label>
+                        <select id="filtroSucursalGanancia" onchange="renderizarGananciaPorMaterial()">
+                            <option value="TODAS">Todas las Sucursales</option>
+                            <option value="Perez">Perez</option>
+                            <option value="Paraíso">Paraíso</option>
+                            <option value="Cartago">Cartago</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:11px; font-weight:700; color:#6b21a8; display:block; margin-bottom:4px;">📦 Material</label>
+                        <select id="filtroMaterialGanancia" onchange="renderizarGananciaPorMaterial()">
+                            <option value="">Todos los Materiales</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="kpi-container" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-bottom:14px;">
+                    <div class="kpi-card" style="background:#fff;">
+                        <div class="label">Ganancia Total</div>
+                        <div class="value" id="kpiGanMatTotal" style="color:#7c3aed;">₡0</div>
+                    </div>
+                    <div class="kpi-card" style="background:#fff;">
+                        <div class="label">Venta Total</div>
+                        <div class="value" id="kpiVentaMatTotal" style="color:var(--primary);">₡0</div>
+                    </div>
+                    <div class="kpi-card" style="background:#fff;">
+                        <div class="label">Costo Total</div>
+                        <div class="value" id="kpiCostoMatTotal" style="color:var(--danger);">₡0</div>
+                    </div>
+                    <div class="kpi-card" style="background:#fff;">
+                        <div class="label">Kilos Despachados</div>
+                        <div class="value" id="kpiKilosMatTotal" style="color:var(--success);">0 kg</div>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="background:#fff;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Material</th>
+                                <th>Sucursal</th>
+                                <th>Contenedores</th>
+                                <th>Kilos</th>
+                                <th>Ganancia/Kg</th>
+                                <th>Ganancia Total</th>
+                                <th>Venta Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bodyGananciaMaterial">
+                            <tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 15px;">Sin datos para mostrar.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -375,6 +710,7 @@
                     <table>
                         <thead>
                             <tr>
+                                <th>Sucursal</th>
                                 <th>Código</th>
                                 <th>Fecha</th>
                                 <th>Material</th>
@@ -385,7 +721,7 @@
                             </tr>
                         </thead>
                         <tbody id="bodyContenedores">
-                            <tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 15px;">Cargando...</td></tr>
+                            <tr><td colspan="8" style="text-align:center; color:#94a3b8; padding: 15px;">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -402,7 +738,11 @@
         let facturasBD = [];
         let contenedoresBD = [];
         let faltantesBD = [];
-        let configGanancias = {}; 
+        // 🆕 Nueva estructura: configGanancias[sucursalKey][materialKey] = gananciaPorKg
+        let configGanancias = {};
+        let sucursalConfigActual = null; // Sucursal seleccionada en el panel de configuración
+
+        const SUCURSALES = ["Perez", "Paraíso", "Cartago"];
 
         const firebaseConfig = {
             apiKey: "AIzaSyDGCjpFS1spdyQcFzIjd-8S9GGkOe5fuX8",
@@ -429,6 +769,10 @@
             return limpio.charAt(0).toUpperCase() + limpio.slice(1);
         }
 
+        function formatearColones(n) {
+            return "₡" + (n || 0).toLocaleString('es-CR', { maximumFractionDigits: 2 });
+        }
+
         function mostrarEstado(mensaje, esError = false) {
             const el = document.getElementById('statusBD');
             el.innerText = mensaje;
@@ -436,16 +780,242 @@
             el.style.color = esError ? '#dc2626' : '#16a34a';
         }
 
-        // --- Lógica de Ganancias por Material ---
+        // 🆕 Helper para obtener la ganancia de una sucursal + material
+        function getGanancia(sucursalRaw, materialKey) {
+            const sucKey = normalizarTexto(sucursalRaw);
+            if (!configGanancias[sucKey]) return undefined;
+            return configGanancias[sucKey][materialKey];
+        }
+
+        // 🆕 Helper: obtener todos los materiales de una sucursal
+        function getMaterialesDeSucursal(sucursalRaw) {
+            const sucKey = normalizarTexto(sucursalRaw);
+            return configGanancias[sucKey] || {};
+        }
+
+        // ========================================================
+        // CHIPS DE SUCURSAL PARA CONFIGURACIÓN
+        // ========================================================
+        function seleccionarSucursalConfig(sucursalRaw) {
+            sucursalConfigActual = sucursalRaw;
+            document.querySelectorAll('.sucursal-chip').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.sucursal === sucursalRaw);
+            });
+            document.getElementById('sucursalConfigLabel').innerText = formatearNombre(sucursalRaw);
+            renderizarTablaGanancias();
+        }
+
+        function actualizarContadoresChips() {
+            document.querySelectorAll('.sucursal-chip').forEach(chip => {
+                const sucursal = chip.dataset.sucursal;
+                const mats = getMaterialesDeSucursal(sucursal);
+                const count = Object.keys(mats).length;
+                chip.querySelector('.count').innerText = `${count} material${count !== 1 ? 'es' : ''}`;
+            });
+        }
+        // ========================================================
+
+        // ========================================================
+        // MANEJO DE CAMBIO DE SUCURSAL EN EL FORMULARIO
+        // ========================================================
+        function manejarCambioSucursal() {
+            poblarSelectMateriales();
+            actualizarPreview();
+        }
+
+        function poblarSelectMateriales() {
+            const sucRaw = document.getElementById('sucursalContenedor').value;
+            const sel = document.getElementById('matContenedor');
+            const helper = document.getElementById('helperMaterial');
+            const valorPrevio = sel.value;
+
+            sel.innerHTML = '';
+
+            if (!sucRaw) {
+                sel.disabled = true;
+                sel.innerHTML = `<option value="">🔒 Selecciona una sucursal primero</option>`;
+                helper.innerHTML = '💡 Selecciona la sucursal para cargar sus materiales.';
+                helper.style.color = 'var(--text-muted)';
+                helper.style.fontWeight = '400';
+                return;
+            }
+
+            const mats = getMaterialesDeSucursal(sucRaw);
+            const keys = Object.keys(mats).sort();
+
+            if (keys.length === 0) {
+                sel.disabled = false;
+                sel.innerHTML = `<option value="">⚠️ Sin materiales configurados</option>
+                                 <option value="__CONFIG__">➕ Configurar material para ${formatearNombre(sucRaw)}...</option>`;
+                helper.innerHTML = `⚠️ La sucursal <b>${formatearNombre(sucRaw)}</b> no tiene materiales configurados.`;
+                helper.style.color = '#b45309';
+                helper.style.fontWeight = '600';
+                return;
+            }
+
+            sel.disabled = false;
+            sel.innerHTML = `<option value="">-- Seleccione Material --</option>`;
+            keys.forEach(m => {
+                sel.innerHTML += `<option value="${m}">${formatearNombre(m)} (₡${mats[m].toLocaleString('es-CR')}/kg)</option>`;
+            });
+            sel.innerHTML += `<option value="__CONFIG__">➕ Configurar nuevo material...</option>`;
+
+            // Restaurar selección previa si aún existe
+            if (valorPrevio && keys.includes(valorPrevio)) {
+                sel.value = valorPrevio;
+            }
+
+            helper.innerHTML = `💡 ${keys.length} material${keys.length !== 1 ? 'es' : ''} configurado${keys.length !== 1 ? 's' : ''} para ${formatearNombre(sucRaw)}.`;
+            helper.style.color = 'var(--text-muted)';
+            helper.style.fontWeight = '400';
+        }
+
+        function manejarCambioMaterial() {
+            const sel = document.getElementById('matContenedor');
+            if (sel.value === '__CONFIG__') {
+                const sucRaw = document.getElementById('sucursalContenedor').value;
+                sel.value = '';
+                // Scroll y highlight al panel de configuración
+                const card = document.getElementById('cardConfigGanancias');
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.classList.add('highlight-card');
+                setTimeout(() => card.classList.remove('highlight-card'), 2000);
+                // Preseleccionar la sucursal correcta en el panel
+                if (sucRaw) seleccionarSucursalConfig(sucRaw);
+                document.getElementById('matGananciaInput').focus();
+                actualizarPreview();
+                return;
+            }
+            actualizarPreview();
+        }
+        // ========================================================
+
+        // ========================================================
+        // PREVISUALIZACIÓN EN VIVO
+        // ========================================================
+        function actualizarPreview() {
+            const panel = document.getElementById('previewCalculo');
+            const content = document.getElementById('previewContent');
+            const status = document.getElementById('previewStatus');
+
+            const sucRaw = document.getElementById('sucursalContenedor').value;
+            const materialKey = document.getElementById('matContenedor').value;
+            const kilos = parseFloat(document.getElementById('kilosContenedor').value);
+            const costoKg = parseFloat(document.getElementById('costoKgContenedor').value);
+
+            panel.classList.remove('has-warning', 'is-ready');
+
+            if (!sucRaw) {
+                status.innerText = "En espera";
+                content.className = "preview-empty";
+                content.innerHTML = "Selecciona la sucursal de salida primero.";
+                return;
+            }
+
+            if (!materialKey || materialKey === '__CONFIG__') {
+                status.innerText = "En espera";
+                content.className = "preview-empty";
+                content.innerHTML = `Sucursal: <b>${formatearNombre(sucRaw)}</b>. Ahora selecciona un material.`;
+                return;
+            }
+
+            const materialVisible = formatearNombre(materialKey);
+            const gananciaPorKg = getGanancia(sucRaw, materialKey);
+            const tieneGanancia = gananciaPorKg !== undefined && gananciaPorKg !== null;
+
+            if (isNaN(kilos) || isNaN(costoKg) || kilos <= 0 || costoKg < 0) {
+                status.innerText = "En espera";
+                content.className = "preview-empty";
+                content.innerHTML = `Material: <b>${materialVisible}</b> · Sucursal: <b>${formatearNombre(sucRaw)}</b> · Ganancia: <b style="color:var(--purple)">${tieneGanancia ? formatearColones(gananciaPorKg) + '/kg' : 'Sin configurar'}</b><br><span style="font-size:11px;">Ingresa kilos y costo para ver el cálculo.</span>`;
+                return;
+            }
+
+            const gananciaUsada = tieneGanancia ? gananciaPorKg : 0;
+            const precioVentaKg = costoKg + gananciaUsada;
+            const totalCosto = kilos * costoKg;
+            const totalVenta = kilos * precioVentaKg;
+            const gananciaTotal = kilos * gananciaUsada;
+
+            let html = `<div class="preview-rows">`;
+            html += `
+                <div class="preview-row">
+                    <span class="lbl">🏢 Sucursal</span>
+                    <span class="val">${formatearNombre(sucRaw)}</span>
+                </div>
+                <div class="preview-row">
+                    <span class="lbl">📦 Material</span>
+                    <span class="val">${materialVisible}</span>
+                </div>
+                <div class="preview-row">
+                    <span class="lbl">⚖️ Kilos</span>
+                    <span class="val">${kilos.toLocaleString('es-CR')} kg</span>
+                </div>
+                <div class="preview-row costo">
+                    <span class="lbl">💸 Costo de Compra</span>
+                    <span class="val">${formatearColones(costoKg)} / kg</span>
+                </div>
+                <div class="preview-row">
+                    <span class="lbl">✨ Ganancia de ${formatearNombre(sucRaw)}</span>
+                    <span class="val" style="color:${tieneGanancia ? 'var(--purple)' : 'var(--danger)'};">${tieneGanancia ? formatearColones(gananciaUsada) + ' / kg' : 'Sin configurar'}</span>
+                </div>
+                <div class="preview-row venta">
+                    <span class="lbl">🏷️ Precio de Venta</span>
+                    <span class="val">${formatearColones(precioVentaKg)} / kg</span>
+                </div>
+                <div class="preview-row">
+                    <span class="lbl">💰 Costo Total</span>
+                    <span class="val" style="color:var(--danger);">${formatearColones(totalCosto)}</span>
+                </div>
+                <div class="preview-row venta">
+                    <span class="lbl">🟢 Venta Total</span>
+                    <span class="val">${formatearColones(totalVenta)}</span>
+                </div>
+                <div class="preview-row highlight ganancia-total">
+                    <span class="lbl">💎 Ganancia Total</span>
+                    <span class="val">${formatearColones(gananciaTotal)}</span>
+                </div>
+            `;
+
+            const avisos = [];
+            if (!tieneGanancia) avisos.push(`El material <b>"${materialVisible}"</b> no tiene ganancia configurada para <b>${formatearNombre(sucRaw)}</b>.`);
+
+            if (avisos.length > 0) {
+                html += `<div class="preview-warning"><span class="icon">⚠️</span><div>${avisos.join('<br>')}</div></div>`;
+                panel.classList.add('has-warning');
+                status.innerText = "⚠️ Revisar";
+            } else {
+                panel.classList.add('is-ready');
+                status.innerText = "✅ Listo";
+            }
+
+            html += `</div>`;
+            content.className = "";
+            content.innerHTML = html;
+        }
+        // ========================================================
+
+        // --- Configuración de Ganancias ---
         async function cargarConfigGanancias() {
             try {
                 const docSnap = await db.collection("configuracion_utilidades").doc("ganancias_por_material").get();
                 if (docSnap.exists) {
-                    configGanancias = docSnap.data().datos || {};
+                    const data = docSnap.data().datos || {};
+                    // 🆕 Migración: si detectamos formato plano antiguo (valores numéricos), lo descartamos
+                    const primerValor = Object.values(data)[0];
+                    if (typeof primerValor === 'number') {
+                        console.warn("⚠️ Formato antiguo detectado. Se requiere reconfigurar por sucursal.");
+                        configGanancias = {};
+                        mostrarEstado("⚠️ Estructura de datos antigua detectada. Por favor reconfigura las ganancias por sucursal.", true);
+                    } else {
+                        configGanancias = data;
+                    }
                 } else {
                     configGanancias = {};
                 }
-                renderizarTablaGanancias();
+                actualizarContadoresChips();
+                poblarSelectMateriales();
+                actualizarPreview();
+                if (sucursalConfigActual) renderizarTablaGanancias();
             } catch (e) {
                 console.error("Error cargando ganancias", e);
             }
@@ -454,16 +1024,25 @@
         function renderizarTablaGanancias() {
             const tbody = document.getElementById('bodyGananciasConfig');
             tbody.innerHTML = "";
-            const keys = Object.keys(configGanancias);
-            if (keys.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding: 10px;">Sin ganancias configuradas.</td></tr>`;
+
+            if (!sucursalConfigActual) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding: 10px;">Selecciona una sucursal arriba.</td></tr>`;
                 return;
             }
+
+            const mats = getMaterialesDeSucursal(sucursalConfigActual);
+            const keys = Object.keys(mats).sort();
+
+            if (keys.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding: 10px;">Sin materiales configurados para ${formatearNombre(sucursalConfigActual)}.</td></tr>`;
+                return;
+            }
+
             keys.forEach(mat => {
                 tbody.innerHTML += `
                     <tr>
                         <td><b>${formatearNombre(mat)}</b></td>
-                        <td>₡${configGanancias[mat]}</td>
+                        <td>₡${mats[mat]}</td>
                         <td><button class="btn-reset" style="width:auto; background:#fee2e2; color:#dc2626; padding:2px 8px; margin-top:0;" onclick="eliminarGananciaConfig('${mat}')">x</button></td>
                     </tr>
                 `;
@@ -471,32 +1050,57 @@
         }
 
         async function guardarGananciaConfig() {
-            const mat = document.getElementById('matGananciaInput').value.trim();
-            const ganancia = parseFloat(document.getElementById('gananciaKiloInput').value);
-            if (!mat || isNaN(ganancia) || ganancia < 0) {
-                alert("⚠️ Complete los datos correctamente.");
+            if (!sucursalConfigActual) {
+                alert("⚠️ Primero selecciona una sucursal en los chips de arriba.");
                 return;
             }
-            
-            const matNormalizado = normalizarTexto(mat);
-            configGanancias[matNormalizado] = ganancia;
+
+            const mat = document.getElementById('matGananciaInput').value.trim();
+            const ganancia = parseFloat(document.getElementById('gananciaKiloInput').value);
+
+            if (!mat || isNaN(ganancia) || ganancia < 0) {
+                alert("⚠️ Complete el nombre del material y la ganancia por kilo.");
+                return;
+            }
+
+            const sucKey = normalizarTexto(sucursalConfigActual);
+            const matKey = normalizarTexto(mat);
+
+            if (!configGanancias[sucKey]) configGanancias[sucKey] = {};
+
+            const esNuevo = configGanancias[sucKey][matKey] === undefined;
+            configGanancias[sucKey][matKey] = ganancia;
+
             await db.collection("configuracion_utilidades").doc("ganancias_por_material").set({ datos: configGanancias });
-            
+
             document.getElementById('matGananciaInput').value = '';
             document.getElementById('gananciaKiloInput').value = '';
+
+            actualizarContadoresChips();
             renderizarTablaGanancias();
-            mostrarEstado("✅ Ganancia configurada y guardada en la BD.");
+            poblarSelectMateriales();
+            actualizarPreview();
+
+            mostrarEstado(`✅ Ganancia ${esNuevo ? 'creada' : 'actualizada'}: ${formatearNombre(mat)} en ${formatearNombre(sucursalConfigActual)} = ${formatearColones(ganancia)}/kg.`);
         }
 
         async function eliminarGananciaConfig(mat) {
-            if(confirm(`¿Eliminar la ganancia para "${formatearNombre(mat)}"?`)) {
-                delete configGanancias[mat];
+            if (!sucursalConfigActual) return;
+            const sucKey = normalizarTexto(sucursalConfigActual);
+            if (!configGanancias[sucKey] || configGanancias[sucKey][mat] === undefined) return;
+
+            if (confirm(`¿Eliminar la ganancia de "${formatearNombre(mat)}" para la sucursal "${formatearNombre(sucursalConfigActual)}"?`)) {
+                delete configGanancias[sucKey][mat];
+                if (Object.keys(configGanancias[sucKey]).length === 0) delete configGanancias[sucKey];
                 await db.collection("configuracion_utilidades").doc("ganancias_por_material").set({ datos: configGanancias });
+                actualizarContadoresChips();
                 renderizarTablaGanancias();
+                poblarSelectMateriales();
+                actualizarPreview();
             }
         }
 
-        // --- Lógica Principal de Datos ---
+        // --- Carga principal ---
         async function cargarDatosBD() {
             mostrarEstado("⏳ Consultando Firestore (facturas_compras, contenedores y revisiones_faltantes)...");
             try {
@@ -513,11 +1117,28 @@
                 snapFaltantes.forEach(doc => faltantesBD.push({ id: doc.id, ...doc.data() }));
 
                 mostrarEstado(`✅ Éxito: Se cargaron ${facturasBD.length} facturas, ${contenedoresBD.length} contenedores y ${faltantesBD.length} registros de gastos.`);
+                
+                poblarSelectores();
                 procesarYRenderizar(facturasBD, contenedoresBD, faltantesBD);
+                renderizarGananciaPorMaterial();
             } catch (error) {
                 console.error("Error al conectar:", error);
                 mostrarEstado(`❌ Error al conectar con Firestore: ${error.message}`, true);
             }
+        }
+
+        function poblarSelectores() {
+            const selMat = document.getElementById('filtroMaterialGanancia');
+            const matActual = selMat.value;
+            const mats = new Set();
+            contenedoresBD.forEach(c => {
+                if (c.material) mats.add(formatearNombre(c.material));
+            });
+            selMat.innerHTML = `<option value="">Todos los Materiales</option>`;
+            [...mats].sort().forEach(m => {
+                selMat.innerHTML += `<option value="${m}">${m}</option>`;
+            });
+            if (matActual && mats.has(matActual)) selMat.value = matActual;
         }
 
         function extraerMaterialesDeFactura(factura) {
@@ -561,16 +1182,114 @@
                 return coincideSuc && coincideF;
             });
 
-            mostrarEstado(`🔍 Filtro aplicado: ${facturasFiltradas.length} facturas y ${faltantesFiltrados.length} registros de gastos.`);
-            procesarYRenderizar(facturasFiltradas, contenedoresBD, faltantesFiltrados);
+            const contenedoresFiltrados = contenedoresBD.filter(c => {
+                const coincideSuc = sucursalSel === "TODAS" || normalizarTexto(c.sucursal) === normalizarTexto(sucursalSel);
+                const fechaC = c.fecha || "";
+                const coincideF = (!fInicio || fechaC >= fInicio) && (!fFin || fechaC <= fFin);
+                return coincideSuc && coincideF;
+            });
+
+            mostrarEstado(`🔍 Filtro aplicado: ${facturasFiltradas.length} facturas, ${contenedoresFiltrados.length} contenedores y ${faltantesFiltrados.length} registros de gastos.`);
+            
+            document.getElementById('filtroSucursalGanancia').value = sucursalSel;
+            
+            procesarYRenderizar(facturasFiltradas, contenedoresFiltrados, faltantesFiltrados);
+            renderizarGananciaPorMaterial();
         }
 
         function limpiarFiltros() {
             document.getElementById('selectSucursal').value = "TODAS";
             document.getElementById('fechaInicio').value = "";
             document.getElementById('fechaFin').value = "";
+            document.getElementById('filtroSucursalGanancia').value = "TODAS";
+            document.getElementById('filtroMaterialGanancia').value = "";
             mostrarEstado(`↺ Registros restablecidos (${facturasBD.length} facturas totales).`);
             procesarYRenderizar(facturasBD, contenedoresBD, faltantesBD);
+            renderizarGananciaPorMaterial();
+        }
+
+        function renderizarGananciaPorMaterial() {
+            const sucFiltro = document.getElementById('filtroSucursalGanancia').value;
+            const matFiltro = document.getElementById('filtroMaterialGanancia').value;
+
+            const filtrados = contenedoresBD.filter(c => {
+                const coincideSuc = sucFiltro === "TODAS" || normalizarTexto(c.sucursal) === normalizarTexto(sucFiltro);
+                const coincideMat = !matFiltro || formatearNombre(c.material) === matFiltro;
+                return coincideSuc && coincideMat;
+            });
+
+            const agrupado = {};
+            let totKilos = 0, totCosto = 0, totVenta = 0, totGanancia = 0;
+
+            filtrados.forEach(c => {
+                const matVisible = formatearNombre(c.material);
+                const sucVisible = formatearNombre(c.sucursal || "Sin Sucursal");
+                const key = `${matVisible}||${sucVisible}`;
+
+                const kilos = parseFloat(c.kilos) || 0;
+                const costoKg = parseFloat(c.costo_compra) || 0;
+                const ventaKg = parseFloat(c.precio_venta_kg) || 0;
+                const gananciaKg = parseFloat(c.ganancia_por_kg) || 0;
+
+                const costoTotal = kilos * costoKg;
+                const ventaTotal = parseFloat(c.total) || (kilos * ventaKg);
+                const gananciaTotal = parseFloat(c.ganancia_calculada) || (kilos * gananciaKg);
+
+                if (!agrupado[key]) {
+                    agrupado[key] = {
+                        material: matVisible,
+                        sucursal: sucVisible,
+                        contenedores: 0,
+                        kilos: 0,
+                        costo: 0,
+                        venta: 0,
+                        ganancia: 0,
+                        gananciaKg: gananciaKg
+                    };
+                }
+                const g = agrupado[key];
+                g.contenedores += 1;
+                g.kilos += kilos;
+                g.costo += costoTotal;
+                g.venta += ventaTotal;
+                g.ganancia += gananciaTotal;
+                if (gananciaKg) g.gananciaKg = gananciaKg;
+
+                totKilos += kilos;
+                totCosto += costoTotal;
+                totVenta += ventaTotal;
+                totGanancia += gananciaTotal;
+            });
+
+            document.getElementById('kpiGanMatTotal').innerText = formatearColones(totGanancia);
+            document.getElementById('kpiVentaMatTotal').innerText = formatearColones(totVenta);
+            document.getElementById('kpiCostoMatTotal').innerText = formatearColones(totCosto);
+            document.getElementById('kpiKilosMatTotal').innerText = totKilos.toLocaleString('es-CR', { maximumFractionDigits: 1 }) + " kg";
+
+            const tbody = document.getElementById('bodyGananciaMaterial');
+            tbody.innerHTML = "";
+
+            const filas = Object.values(agrupado).sort((a, b) => b.ganancia - a.ganancia);
+
+            if (!filas.length) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 15px;">Sin datos para mostrar.</td></tr>`;
+                return;
+            }
+
+            filas.forEach(f => {
+                const colorGan = f.ganancia >= 0 ? '#7c3aed' : '#dc2626';
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>📦 ${f.material}</strong></td>
+                        <td><span class="badge-sucursal">${f.sucursal}</span></td>
+                        <td style="font-weight:600;">${f.contenedores}</td>
+                        <td>${f.kilos.toLocaleString('es-CR', { maximumFractionDigits: 1 })} kg</td>
+                        <td><span class="badge-ganancia">₡${f.gananciaKg.toLocaleString('es-CR')}</span></td>
+                        <td style="font-weight:800; color:${colorGan};">₡${f.ganancia.toLocaleString('es-CR')}</td>
+                        <td style="font-weight:700; color:var(--primary);">₡${f.venta.toLocaleString('es-CR')}</td>
+                    </tr>
+                `;
+            });
         }
 
         function procesarYRenderizar(facturasList, contenedoresList, faltantesList) {
@@ -619,9 +1338,9 @@
                     matObj.kilosEnviados += parseFloat(c.kilos || 0);
                 }
 
-                // Actualizado para mostrar el Costo y el Precio de Venta calculado
                 tbodyCont.innerHTML += `
                     <tr>
+                        <td><span class="badge-sucursal">${formatearNombre(c.sucursal || 'N/D')}</span></td>
                         <td><strong>${c.codigo || 'S/C'}</strong></td>
                         <td>${c.fecha || ''}</td>
                         <td>${formatearNombre(c.material)}</td>
@@ -634,7 +1353,7 @@
             });
 
             if (contenedoresList.length === 0) {
-                tbodyCont.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8; padding: 15px;">No hay contenedores registrados.</td></tr>`;
+                tbodyCont.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#94a3b8; padding: 15px;">No hay contenedores registrados.</td></tr>`;
             }
 
             let totalGastosFaltantes = 0;
@@ -702,36 +1421,40 @@
         }
 
         async function registrarContenedorBD() {
+            const sucursal = document.getElementById('sucursalContenedor').value;
             const codigo = document.getElementById('numContenedor').value;
             const fecha = document.getElementById('fechaContenedor').value;
-            const material = document.getElementById('matContenedor').value;
+            const materialKey = document.getElementById('matContenedor').value;
             const kilos = parseFloat(document.getElementById('kilosContenedor').value);
-            // CAMBIO: Leemos el costo de compra ingresado por el usuario
             const costoCompra = parseFloat(document.getElementById('costoKgContenedor').value);
 
-            if (!codigo || !fecha || !material || isNaN(kilos) || isNaN(costoCompra)) {
-                alert("Por favor complete todos los campos del contenedor.");
+            if (!sucursal || !codigo || !fecha || !materialKey || materialKey === '__CONFIG__' || isNaN(kilos) || isNaN(costoCompra)) {
+                alert("Por favor complete todos los campos del contenedor, incluyendo la sucursal y el material.");
                 return;
             }
 
-            // Lógica de cálculo automático
-            const matKey = normalizarTexto(material);
-            const gananciaPorKg = configGanancias[matKey] || 0; 
-            
+            const gananciaPorKg = getGanancia(sucursal, materialKey);
+            if (gananciaPorKg === undefined) {
+                alert(`⚠️ No hay ganancia configurada para "${formatearNombre(materialKey)}" en la sucursal "${formatearNombre(sucursal)}".`);
+                return;
+            }
+
+            const material = formatearNombre(materialKey);
             const precioVentaKg = costoCompra + gananciaPorKg;
             const totalVenta = kilos * precioVentaKg;
             const gananciaTotal = kilos * gananciaPorKg;
 
             const nuevoContenedor = {
+                sucursal,
                 codigo,
                 fecha,
                 material,
                 kilos,
-                costo_compra: costoCompra,         // Guardamos el costo de compra
-                ganancia_por_kg: gananciaPorKg,     // Guardamos la ganancia por kg utilizada
-                precio_venta_kg: precioVentaKg,     // Guardamos el precio de venta calculado
-                total: totalVenta,                  // Guardamos el total cobrado
-                ganancia_calculada: gananciaTotal,  // Guardamos la ganancia extra
+                costo_compra: costoCompra,
+                ganancia_por_kg: gananciaPorKg,
+                precio_venta_kg: precioVentaKg,
+                total: totalVenta,
+                ganancia_calculada: gananciaTotal,
                 creadoEn: firebase.firestore.FieldValue.serverTimestamp()
             };
 
@@ -739,12 +1462,17 @@
                 mostrarEstado("⏳ Guardando nuevo contenedor...");
                 await db.collection("contenedores").add(nuevoContenedor);
                 
+                document.getElementById('sucursalContenedor').value = '';
                 document.getElementById('numContenedor').value = '';
                 document.getElementById('matContenedor').value = '';
                 document.getElementById('kilosContenedor').value = '';
-                document.getElementById('costoKgContenedor').value = ''; // Limpiamos el costo
+                document.getElementById('costoKgContenedor').value = '';
+
+                poblarSelectMateriales();
+                actualizarPreview();
 
                 cargarDatosBD();
+                mostrarEstado(`✅ Contenedor "${codigo}" guardado. Ganancia: ${formatearColones(gananciaTotal)}.`);
             } catch (error) {
                 alert("Error al guardar contenedor en BD: " + error.message);
                 mostrarEstado(`❌ Error al guardar: ${error.message}`, true);
@@ -754,6 +1482,12 @@
         window.onload = function() {
             cargarConfigGanancias();
             cargarDatosBD();
+            actualizarPreview();
+            document.getElementById('matContenedor').addEventListener('change', manejarCambioMaterial);
+            // Por defecto, seleccionar la primera sucursal en el panel de config
+            setTimeout(() => {
+                if (!sucursalConfigActual) seleccionarSucursalConfig("Perez");
+            }, 300);
         };
     </script>
 </body>
